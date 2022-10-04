@@ -8,11 +8,12 @@ Modified by R. Jolivet in 2017 (multiprocessing added for point dropping)
 
 # Externals
 import os
-import struct 
+import struct
 import sys
 import numpy as np
 import copy
 import multiprocessing as mp
+import subprocess
 
 # Scipy
 from scipy.io import FortranFile
@@ -27,7 +28,7 @@ class interpolator(mp.Process):
     Args:
         * interpolators     : List of interpolators
         * queue             : Instance of mp.Queue
-        * depths            : depths (first dimnesion of the interpolators) 
+        * depths            : depths (first dimnesion of the interpolators)
         * distas            : distances (second dimension of the interpolators)
         * istart            : starting point
         * iend              : ending point
@@ -48,7 +49,7 @@ class interpolator(mp.Process):
         self.iend = iend
 
         # Save the queue
-        self.queue = queue 
+        self.queue = queue
 
         # Initialize the process
         super(interpolator, self).__init__()
@@ -63,19 +64,19 @@ class interpolator(mp.Process):
         '''
         Run the interpolation
         '''
-        
+
         # Interpolate
         values = []
         for inter in self.interpolators:
             values.append(inter(np.vstack((self.depths[self.istart:self.iend],
                                            self.distas[self.istart:self.iend])).T))
-        
+
         # Save start/end
         values.append((self.istart, self.iend))
 
         # Store output
         self.queue.put(values)
-        
+
         # All done
         return
     # ----------------------------------------------------------------------
@@ -142,7 +143,7 @@ class pointdropper(mp.Process):
                 keepGoing = True
                 tobeSplitted = [patch]
                 splittedPatches = []
-            else: 
+            else:
                 keepGoing = False
                 print('Be carefull, patch {} has not been refined into point sources'.format(self.fault.getindex(patch)))
                 print('Possible causes: Area = {}, Nodes = {}'.format(area, patch))
@@ -151,7 +152,7 @@ class pointdropper(mp.Process):
 
             # Iterate
             while keepGoing:
-                
+
                 # Take a patch
                 p = tobeSplitted.pop()
 
@@ -162,7 +163,7 @@ class pointdropper(mp.Process):
                 for splitted in Splitted:
                     # get area
                     area = self.fault.patchArea(splitted)
-                    # check 
+                    # check
                     if area<self.charArea[i]:
                         splittedPatches.append(splitted)
                     else:
@@ -180,7 +181,7 @@ class pointdropper(mp.Process):
             # When all done get their centers
             geometry = [self.fault.getpatchgeometry(p, center=True)[:3] for p in splittedPatches]
             x, y, z = zip(*geometry)
-            strike, dip = self.fault.getpatchgeometry(patch)[5:7] 
+            strike, dip = self.fault.getpatchgeometry(patch)[5:7]
             strike = np.ones((len(x),))*strike
             strike = strike.tolist()
             dip = np.ones((len(x),))*dip
@@ -216,7 +217,7 @@ def dropSourcesInPatches(fault, verbose=False, returnSplittedPatches=False):
     Args:
         * fault                   : instance of Fault (Rectangular or Triangular).
         * verbose                 : Talk to me
-        * returnSplittedPactches  : Returns a triangularPatches object with the splitted 
+        * returnSplittedPactches  : Returns a triangularPatches object with the splitted
                                   patches.
 
     Return:
@@ -227,7 +228,7 @@ def dropSourcesInPatches(fault, verbose=False, returnSplittedPatches=False):
         * Strikes               : Strike angles of the subpatches (rad)
         * Dips                  : Dip angles of the subpatches (rad)
         * Areas                 : Area of the subpatches (km^2)
-        
+
         if returnSplittedPatches:
         * splitFault            : Fault object with the subpatches
     '''
@@ -247,7 +248,7 @@ def dropSourcesInPatches(fault, verbose=False, returnSplittedPatches=False):
 
     # show me
     if verbose:
-        print('Dropping point sources') 
+        print('Dropping point sources')
 
     # Spacing
     if hasattr(fault, 'sourceArea'):
@@ -277,8 +278,8 @@ def dropSourcesInPatches(fault, verbose=False, returnSplittedPatches=False):
     npatches = len(fault.patch)
 
     # Create them
-    workers = [pointdropper(fault, output, charArea, 
-                            int(np.floor(i*npatches/nworkers)), 
+    workers = [pointdropper(fault, output, charArea,
+                            int(np.floor(i*npatches/nworkers)),
                             int(np.floor((i+1)*npatches/nworkers))) for i in range(nworkers)]
     workers[-1].iend = npatches
 
@@ -291,9 +292,9 @@ def dropSourcesInPatches(fault, verbose=False, returnSplittedPatches=False):
     for i in range(nworkers):
         ids, xs, ys, zs, strike, dip, area, splitted = output.get()
         Id.extend(ids)
-        X.extend(xs) 
+        X.extend(xs)
         Y.extend(ys)
-        Z.extend(zs) 
+        Z.extend(zs)
         Strike.extend(strike)
         Dip.extend(dip)
         Area.extend(area)
@@ -334,20 +335,20 @@ def sum_layered(xs, ys, zs, strike, dip, rake, slip, width, length,\
 
             * xs                : m, east coord to center of fault patch
             * ys                : m, north coord to center of fault patch
-            * zs                : m,depth coord to center of fault patch (+ down) 
-            * strike            : deg, clockwise from north 
-            * dip               : deg, 90 is vertical 
-            * rake              : deg, 0 left lateral strike slip, 90 up-dip slip 
+            * zs                : m,depth coord to center of fault patch (+ down)
+            * strike            : deg, clockwise from north
+            * dip               : deg, 90 is vertical
+            * rake              : deg, 0 left lateral strike slip, 90 up-dip slip
             * slip              : m, slip in the rake direction
             * width             : m, width of the patch
             * length            : m, length of the patch
             * npw               : integers, number of sources along strike
-            * npy               : integers, number of sources along dip 
-    
+            * npy               : integers, number of sources along dip
+
         <-- Receivers --> 1-D numpy arrays
 
-            * xr                : m, east coordinate of receivers 
-            * yr                : m, north coordinate of receivers 
+            * xr                : m, east coordinate of receivers
+            * yr                : m, north coordinate of receivers
 
         <-- Elastic structure -->
 
@@ -356,7 +357,7 @@ def sum_layered(xs, ys, zs, strike, dip, rake, slip, width, length,\
         <-- File Naming -->
 
             * prefix            : string, prefix for the files generated by sum_layered
-    
+
     Kwargs:
 
             * BIN_EDKS          : Environement variable where EDKS executables are.
@@ -379,7 +380,7 @@ def sum_layered(xs, ys, zs, strike, dip, rake, slip, width, length,\
     A = length*width        # Area of the patches
 
     # Some formats
-    BIN_FILE_FMT = 'f' # python float = C/C++ float = Fortran 'real*4' 
+    BIN_FILE_FMT = 'f' # python float = C/C++ float = Fortran 'real*4'
     NBYTES_FILE_FMT = 4  # a Fortran (real*4) uses 4 bytes.
 
     # convert sources from center to top edge of fault patch ("sum_layered" needs that)
@@ -392,31 +393,31 @@ def sum_layered(xs, ys, zs, strike, dip, rake, slip, width, length,\
     dZ = (width/2.0) * sind
     dD = (width/2.0) * cosd
 
-    # rotation to global coordinates 
+    # rotation to global coordinates
     xs = xs - dD * coss
     ys = ys + dD * sins
     zs = zs - dZ
 
     # Define filenames:
-    file_rec = prefix + '.rec'
-    file_pat = prefix + '.pat'
-    file_dux = prefix + '_ux.dis'
-    file_duy = prefix + '_uy.dis'
-    file_duz = prefix + '_uz.dis'
+    file_rec = os.path.dirname(edks) + '/' +  prefix + '.rec'
+    file_pat = os.path.dirname(edks) + '/' +  prefix + '.pat'
+    file_dux = os.path.dirname(edks) + '/' +  prefix + '_ux.dis'
+    file_duy = os.path.dirname(edks) + '/' +  prefix + '_uy.dis'
+    file_duz = os.path.dirname(edks) + '/' +  prefix + '_uz.dis'
 
     # Clean the file if they exist
     cmd = 'rm -f {} {} {} {} {}'.format(file_rec, file_pat, file_dux, file_duy, file_duz)
-    os.system(cmd) 
-    
+    os.system(cmd)
+
     # write receiver location file (observation points)
     temp = [xr, yr]
-    file = open(file_rec, 'wb') 
-     
+    file = open(file_rec, 'wb')
+
     for k in range(0, nrec):
        for i in range(0, len(temp)):
-          file.write( struct.pack( BIN_FILE_FMT, temp[i][k] ) )       
-    file.close() 
-  
+          file.write( struct.pack( BIN_FILE_FMT, temp[i][k] ) )
+    file.close()
+
     # write point sources information
     temp = [xs, ys, zs, strike, dip, rake, width, length, slip]
     file = open(file_pat, 'wb');
@@ -424,21 +425,9 @@ def sum_layered(xs, ys, zs, strike, dip, rake, slip, width, length,\
        for i in range(0, len(temp)):
           file.write( struct.pack( BIN_FILE_FMT, temp[i][k] ) )
     file.close()
-  
+
     # call sum_layered
-    if not os.path.exists(os.path.basename(edks)):
-        os.symlink(edks, os.path.basename(edks))
-        os.symlink(os.path.join(os.path.dirname(edks), 'hdr.'+os.path.basename(edks)), 'hdr.'+os.path.basename(edks))
-        removeSymLink = True
-    else:
-        removeSymLink = False
-    cmd = '{}/sum_layered {} {} {} {} {} {}'.format(BIN_EDKS, os.path.basename(edks), prefix, nrec, Np, npw, npy)
-    if verbose:
-        print(cmd)
-    os.system(cmd)
-    if removeSymLink: 
-        os.unlink(os.path.basename(edks))
-        os.unlink('hdr.'+os.path.basename(edks))
+    subprocess.run([f'{BIN_EDKS}/sum_layered', f'{os.path.basename(edks)}', f'{prefix}', f'{nrec}', f'{Np}', f'{npw}', f'{npy}'], cwd=f'{os.path.dirname(edks)}')
 
     # read sum_layered output Greens function
     # ux
@@ -446,36 +435,108 @@ def sum_layered(xs, ys, zs, strike, dip, rake, slip, width, length,\
 
     # uy
     uy = np.fromfile(file_duy, 'f').reshape((nrec, Np), order='F')
- 
+
     # uz
     uz = np.fromfile(file_duz, 'f').reshape((nrec, Np), order='F')
- 
+
     # remove IO files.
     if cleanUp:
         cmd = 'rm -f {} {} {} {} {}'.format(file_rec, file_pat, file_dux, file_duy, file_duz)
-        os.system(cmd)  
- 
+        os.system(cmd)
+
     # return the GF matrices
     return [ux, uy, uz]
 # ----------------------------------------------------------------------
 
 # ----------------------------------------------------------------------
-# A class that interpolates edks Kernels (same as fortran's sum_layered, 
+# Compute the Green's functions for the patches using fomosto
+def sum_layered_fomosto(xs, ys, zs, strike, dip, rake, area, slip, xr, yr, stratKernels):
+
+    # Some initializations
+    Np = len(xs)          # number of sources
+    nrec = len(xr)        # number of receivers
+    mu = calculate_mu(zs, stratKernels) # mu for the point sources
+
+    # Calculate point source magnitude
+    M = np.log10(mu * area * slip * 1e7) / 1.5 - 10.7
+
+    store_id = os.path.basename(stratKernels)
+    engine = gf.LocalEngine(store_superdirs=[f'{os.path.dirname(stratKernels)}'])
+
+    target = gf.StaticTarget(east_shifts = xr, north_shifts = yr, interpolation = 'multilinear', store_id = store_id)
+
+    ux = np.zeros((nrec, Np))
+    uy = np.zeros((nrec, Np))
+    uz = np.zeros((nrec, Np))
+
+    for i in range(Np):
+        dc_source = gf.DCSource(lat = 0.0, lon = 0.0, east_shift = xs[i], north_shift = ys[i], depth = zs[i], strike = strike[i], dip = dip[i], rake = rake[i], magnitude = M[i])
+        result = engine.process(dc_source, target)
+        disp = result.results_list[0][0].result
+        ux[:, i] = disp['displacement.e']
+        uy[:, i] = disp['displacement.n']
+        uz[:, i] = disp['displacement.d'] * -1.0
+
+    # return the GF matrices
+    return [ux, uy, uz]
+# ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# A class that interpolates edks Kernels (same as fortran's sum_layered,
 # but with more flexibility for the interpolation part)
 
+# ----------------------------------------------------------------------
+# Compute the Green's functions for the patches using fomosto
+def calculate_mu(zs, stratKernels):
+
+    f = open(os.path.join(stratKernels, 'config'), 'r')
+    lines = f.readlines()
+    model = []
+    mu = []
+    top = None
+    bot = None
+    for i in range(len(lines)):
+        if (lines[i].split()[0] == 'earthmodel_1d:'):
+            top = i
+        elif (lines[i].split()[0] == 'sample_rate:'):
+            bot = i
+
+    for i in range(len(lines)):
+        if (i > top and i < bot):
+            model.append([float(num) for num in lines[i].split()])
+    model = np.array(model)
+
+    zsm = zs / 1e3
+    for i in range(len(zsm)):
+        if (zsm[i] >= model[-1, 0]):
+            vs = model[-1, 2]
+            den = model[-1, 3]
+        else:
+            for j in range(model.shape[0]):
+                if (zsm[i] >= model[j, 0] and zsm[i] <= model[j+1, 0]):
+                    vs = (model[j, 2] + model[j+1, 2]) / 2.0
+                    den = (model[j, 3] + model[j+1, 3]) / 2.0
+        mu.append(den * vs**2 * 1e9)
+    mu = np.array(mu)
+
+    return mu
+# ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+
 class interpolateEDKS(object):
-    
+
     '''
     A class that will interpolate the EDKS Kernels and produce Green's
-    functions in a stratified medium. This class will only use point 
+    functions in a stratified medium. This class will only use point
     sources as the summation is done in the fault object.
 
-    What goes in this class is a translation of the point source case of 
-    EDKS. We use the case where slip perpendicular to the rake angle is 
+    What goes in this class is a translation of the point source case of
+    EDKS. We use the case where slip perpendicular to the rake angle is
     equal to zero.
 
     Args:
-        * kernel    : EDKS Kernel file (mykernel.edks). One needs to 
+        * kernel    : EDKS Kernel file (mykernel.edks). One needs to
                       provide the header file as well (hdr.mykernel.edks)
     '''
 
@@ -503,17 +564,17 @@ class interpolateEDKS(object):
 
         # Show me
         if self.verbose:
-            print('Read Kernel Header file hdr.{}'.format(self.kernel))
+            print(f'Read Kernel Header file {os.path.split(self.kernel)[0]}/hdr.{os.path.split(self.kernel)[1]}')
 
         # Open the header file
-        fhd = open('hdr.{}'.format(self.kernel), 'r')
+        fhd = open(f'{os.path.split(self.kernel)[0]}/hdr.{os.path.split(self.kernel)[1]}', 'r')
 
         # Read things
         self.prefix = fhd.readline().split()[0]
         self.nlayer = int(fhd.readline().split()[0])
 
         # Layer characteristics
-        rho = [] 
+        rho = []
         alpha = []
         beta = []
         thickness = []
@@ -526,7 +587,7 @@ class interpolateEDKS(object):
             beta.append(float(line[2]))
             thickness.append(float(line[3]))
 
-        # Software date 
+        # Software date
         self.softwareDate = fhd.readline().split()
         self.softwareVersion = fhd.readline().split()
         self.softwareComments = fhd.readline().split()
@@ -608,7 +669,7 @@ class interpolateEDKS(object):
             xr = np.array([xr])
             yr = np.array([yr])
 
-        # convert sources from center to top edge of fault patch 
+        # convert sources from center to top edge of fault patch
         sind = np.sin( dip )
         cosd = np.cos( dip )
         sins = np.sin( strike )
@@ -618,7 +679,7 @@ class interpolateEDKS(object):
         dZ = (np.sqrt(area)/2.0) * sind
         dD = (np.sqrt(area)/2.0) * cosd
 
-        # rotation to global coordinates 
+        # rotation to global coordinates
         xs = xs - dD * coss
         ys = ys + dD * sins
         zs = zs - dZ
@@ -643,23 +704,23 @@ class interpolateEDKS(object):
             # Interpolate
             if self.verbose:
                 print('Interpolate')
-            
+
             # Create holder
             self.interpKernels = np.zeros((len(xs)*len(xr), 10))
-            
+
             # Multiprocessing
             try:
                 nworkers = int(os.environ['OMP_NUM_THREADS'])
             except:
                 nworkers = mp.cpu_count()
 
-            # Create a queue 
+            # Create a queue
             output = mp.Queue()
 
             # Create the workers
             todo = len(distance.flatten())
-            workers = [interpolator(self.interpolators, output, 
-                                    depth.flatten(), distance.flatten(), 
+            workers = [interpolator(self.interpolators, output,
+                                    depth.flatten(), distance.flatten(),
                                     int(np.floor(i*todo/nworkers)),
                                     int(np.floor((i+1)*todo/nworkers))) for i in range(nworkers)]
             workers[-1].iend = todo
@@ -673,7 +734,7 @@ class interpolateEDKS(object):
                 istart,iend = values.pop()
                 for iv,value in enumerate(values):
                     self.interpKernels[istart:iend,iv] = value
-            
+
             # Reshape
             self.interpKernels = self.interpKernels.reshape((len(xs),len(xr),10))
 
@@ -691,7 +752,7 @@ class interpolateEDKS(object):
             if self.verbose:
                 print('Use interpolated kernels')
 
-        # Get what's done 
+        # Get what's done
         kernels = self.interpKernels
 
         # Vertical component  (positive down)
@@ -701,21 +762,21 @@ class interpolateEDKS(object):
            + M[:,np.newaxis,5]*  kernels[:,:,2]*s2az \
            + M[:,np.newaxis,3]*  kernels[:,:,1]*caz \
            + M[:,np.newaxis,4]*  kernels[:,:,1]*saz
-   
+
         # Radial component    (positive away from the source)
         qr = M[:,np.newaxis,1]*( kernels[:,:,5]*c2az/2. - kernels[:,:,3]/6. + kernels[:,:,9]/3.) \
            + M[:,np.newaxis,2]*(-kernels[:,:,5]*c2az/2. - kernels[:,:,3]/6. + kernels[:,:,9]/3.) \
            + M[:,np.newaxis,0]*( kernels[:,:,3] + kernels[:,:,9])/3. \
            + M[:,np.newaxis,5]*  kernels[:,:,5]*s2az \
            + M[:,np.newaxis,3]*  kernels[:,:,4]*caz \
-           + M[:,np.newaxis,4]*  kernels[:,:,4]*saz 
-   
+           + M[:,np.newaxis,4]*  kernels[:,:,4]*saz
+
         # Tangential component (positive if clockwise from zenithal view)
         vt = M[:,np.newaxis,1]*kernels[:,:,7]*s2az/2. \
            - M[:,np.newaxis,2]*kernels[:,:,7]*s2az/2. \
            - M[:,np.newaxis,5]*kernels[:,:,7]*c2az \
            + M[:,np.newaxis,3]*kernels[:,:,6]*saz \
-           - M[:,np.newaxis,4]*kernels[:,:,6]*caz 
+           - M[:,np.newaxis,4]*kernels[:,:,6]*caz
 
         # Cartesian components
         Ux = qr*saz + vt*caz
@@ -738,13 +799,13 @@ class interpolateEDKS(object):
         distas = np.unique(self.distas)
         values = self.zrtdsx.reshape((self.ndepth, self.ndista,10))
 
-        # Create the interpolators (if points fall outside the interpolating box, 
+        # Create the interpolators (if points fall outside the interpolating box,
         # the value will be extrapolated)
-        self.interpolators = [sciint.RegularGridInterpolator((depths, 
-                                                             distas), 
+        self.interpolators = [sciint.RegularGridInterpolator((depths,
+                                                             distas),
                                                              values[:,:,i],
-                                                             method=method, 
-                                                             bounds_error=False, 
+                                                             method=method,
+                                                             bounds_error=False,
                                                              fill_value=None) \
                                                              for i in range(10)]
 
@@ -756,7 +817,7 @@ class interpolateEDKS(object):
         Convert slip and point source geometry to moment.
 
         Args:
-            * slip          : Slip value (m). 
+            * slip          : Slip value (m).
             * area          : Area of the point source (m^2)
             * strike        : Strike angle (rad)
             * dip           : Dip angle (rad)
@@ -800,15 +861,15 @@ class interpolateEDKS(object):
     def _getGeometry(self, xs, ys, zs, xr, yr):
         '''
         Returns some geometrical features
-        
+
         Args:
             * xs, ys, zs    : Source location (floats or np.array)
             * xr, yr        : Receiver location (floats or np.array)
 
         Returns:
-            * distance, depth, caz, saz, c2az, s2az 
+            * distance, depth, caz, saz, c2az, s2az
         '''
-        
+
         # Machine precision
         eps = np.finfo(float).eps
 
