@@ -64,15 +64,15 @@ class RectangularPatches(Fault):
         * ellps     : ellipsoid (optional, default='WGS84')
         * verbose   : Speak to me (default=True)
     '''
-    
+
     # ----------------------------------------------------------------------
     # Initialize class
     def __init__(self, name, utmzone=None, ellps='WGS84', lon0=None, lat0=None, verbose=True):
-        
+
         # Base class init
         super(RectangularPatches,self).__init__(name,
                                                 utmzone=utmzone,
-                                                ellps=ellps, 
+                                                ellps=ellps,
                                                 lon0=lon0,
                                                 lat0=lat0,
                                                 verbose=verbose)
@@ -105,8 +105,8 @@ class RectangularPatches(Fault):
             depth = np.unique(np.array(depth).flatten())
             self.z_patches = depth.tolist()
             self.top = np.min(depth)
-            self.depth = np.max(depth)            
-            
+            self.depth = np.max(depth)
+
         # Set depth
         if top is not None:
             self.top = top
@@ -122,8 +122,8 @@ class RectangularPatches(Fault):
     # ----------------------------------------------------------------------
     # Extrapolate surface trace of the fault
     def extrapolate(self, length_added=50, tol=2., fracstep=5., extrap='ud'):
-        ''' 
-        Extrapolates the surface trace. This is usefull when building deep patches 
+        '''
+        Extrapolates the surface trace. This is usefull when building deep patches
         for interseismic loading.
 
         Args:
@@ -133,7 +133,7 @@ class RectangularPatches(Fault):
             * extrap        : combination of 'u' (extrapolate from the beginning) and 'd' (extrapolate from the end). Default is 'ud'
         '''
 
-        # print 
+        # print
         print ("Extrapolating the fault for {} km".format(length_added))
 
         # Check if the fault has been interpolated before
@@ -153,7 +153,7 @@ class RectangularPatches(Fault):
         self.yi = self.yi.tolist()
 
         if 'd' in extrap:
-        
+
             # First guess for first point
             xt = self.xi[0] - length_added/2.
             yt = fx(xt)
@@ -169,8 +169,8 @@ class RectangularPatches(Fault):
                 # Get the corresponding yt
                 yt = fx(xt)
                 # New distance
-                d = np.sqrt( (xt-self.xi[0])**2 + (yt-self.yi[0])**2) 
-        
+                d = np.sqrt( (xt-self.xi[0])**2 + (yt-self.yi[0])**2)
+
             # prepend the thing
             self.xi.reverse()
             self.xi.append(xt)
@@ -219,7 +219,7 @@ class RectangularPatches(Fault):
         '''
         Returns an array of strike angle for each patch (radians).
 
-        Returns: 
+        Returns:
             * strike    : Array of angles in radians
         '''
 
@@ -246,7 +246,7 @@ class RectangularPatches(Fault):
     def splitPatchesHoriz(self, nPatches, equiv=False, indices=None, keepSlip=False):
         '''
         Splits all the patches in nPatches Horizontally. Directly modifies the
-        patch attribute. Default behavior re-intializes slip to zero. 
+        patch attribute. Default behavior re-intializes slip to zero.
         If keepSlip, then slip values are mapped directly.
 
         Args:
@@ -325,7 +325,7 @@ class RectangularPatches(Fault):
                                     [x4, y4, z4] ])
 
                 # Patch ll
-                patchll = np.array( [ [lon1, lat1, z1], 
+                patchll = np.array( [ [lon1, lat1, z1],
                                       [lon2, lat2, z2],
                                       [lon3, lat3, z3],
                                       [lon4, lat4, z4] ])
@@ -346,7 +346,7 @@ class RectangularPatches(Fault):
         if equiv:
             self.computeEquivRectangle()
 
-        # Initialize slip 
+        # Initialize slip
         if keepSlip:
             self.slip = np.vstack((self.slip, newSlip))
         else:
@@ -406,36 +406,42 @@ class RectangularPatches(Fault):
     # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------
-    # Split all patches in 4
-    def splitPatches(self):
+    def refineMesh(self, initializeSlip = True):
         '''
-        Split all patches in 4 patches.
-
+        Cuts all the patches in 4, based on the mid-point of each rectangle and
+        builds a new fault from that.
         Returns:
             * None
         '''
 
-        # New slip vector
-        slip = []
+        # Iterate over the fault patches
+        newpatches = []
+        for patch in self.patch:
+            rectangles = self.splitPatch(patch)
+            for rectangle in rectangles:
+                newpatches.append(rectangle)
 
-        # New patch list 
-        patches = []
+        # Delete all the patches
+        del self.patch
+        del self.patchll
+        self.patch = []
+        self.patchll = []
+        self.N_slip = None
 
-        for ipatch,patch in enumerate(self.patch):
+        # Add the new patches
+        for patch in newpatches:
+            self.addpatch(patch)
 
-            # Split
-            for p in self.splitPatch(patch): patches.append(p)
-            
-            # Save slip
-            for p in range(4): slip.append(self.slip[ipatch,:])
+        # Initialize slip
+        if initializeSlip:
+            self.initializeslip()
 
-        # Save slip and patches
-        self.patch = patches
-        self.slip = np.array(slip)
-
-        # Clean up
-        self.patch2ll()
-        self.computeEquivRectangle()
+        # Depth things
+        depth = [[p[2] for p in patch] for patch in self.patch]
+        depth = np.unique(np.array(depth).flatten())
+        self.z_patches = depth.tolist()
+        self.top = np.min(depth)
+        self.depth = np.max(depth)
 
         # All done
         return
@@ -459,7 +465,7 @@ class RectangularPatches(Fault):
         if verbose:
             print('Merging patches {} and {} into patch {}'.format(p1,p2,p1))
 
-        newpatch,newpatchll = self._mergePatches(p1, p2, eps=eps)   
+        newpatch,newpatchll = self._mergePatches(p1, p2, eps=eps)
 
         # Replace the patch 1 by the new patch
         self.patch[p1] = newpatch
@@ -507,7 +513,7 @@ class RectangularPatches(Fault):
     # Convert the shallowest patches into a surface trace
     def surfacePatches2Trace(self):
         '''
-        Takes the shallowest patches of the fault and use them to build a 
+        Takes the shallowest patches of the fault and use them to build a
         fault trace. Direclty modifies attributes xf, yf, lonf and latf
 
         Returns:
@@ -524,7 +530,7 @@ class RectangularPatches(Fault):
                 if c[2]==0.0:
                     xf.append(c[0])
                     yf.append(c[1])
-        
+
         # Make arrays
         xf = np.array(xf)
         yf = np.array(yf)
@@ -566,7 +572,7 @@ class RectangularPatches(Fault):
     # ----------------------------------------------------------------------
     # Get the area of a patch
     def patchArea(self, p):
-        ''' 
+        '''
         Computes the area of one patch.
 
         Args:
@@ -620,8 +626,8 @@ class RectangularPatches(Fault):
 
             # Build a ll patch
             patchll = [ [lon1, lat1, zu],
-                        [lon2, lat2, zu], 
-                        [lon2, lat2, zd], 
+                        [lon2, lat2, zu],
+                        [lon2, lat2, zd],
                         [lon1, lat1, zd] ]
 
             # Put it in the list
@@ -635,29 +641,29 @@ class RectangularPatches(Fault):
     # Compute equivalent rectangles
     def computeEquivRectangle(self):
         '''
-        In the case where patches are not exactly rectangular, this method 
+        In the case where patches are not exactly rectangular, this method
         computes the best rectangle that fits within patches. Stores all the
         equivalent rectangles in equivpatch and equivpatchll.
 
         Returns:
             * None
         '''
-        
+
         # Initialize the equivalent structure
         self.equivpatch = []
         self.equivpatchll = []
 
         # Loop on the patches
         for u in range(len(self.patch)):
-            
+
             # Get the patch
             p = self.patch[u]
             p1, p2, p3, p4 = self.patch[u]
-        
+
             # 1. Get the two top points
-            pt1 = p[0]; x1, y1, z1 = pt1 
+            pt1 = p[0]; x1, y1, z1 = pt1
             pt2 = p[1]; x2, y2, z2 = pt2
-            
+
             # 2. Get the strike of this patch
             vs = p2-p1
             vd = p4-p1
@@ -665,16 +671,16 @@ class RectangularPatches(Fault):
             vnz = vs[1]*vd[0]-vs[0]*vd[1]
             if vnz<0.:
                 vs *= -1.
-            strike = np.arctan2( vs[0],vs[1] )            
-            
-            # 3. Get the dip of this patch 
-            dip1 = np.arcsin((p4[2] - p1[2]) / np.sqrt((p1[0] - p4[0])**2 
+            strike = np.arctan2( vs[0],vs[1] )
+
+            # 3. Get the dip of this patch
+            dip1 = np.arcsin((p4[2] - p1[2]) / np.sqrt((p1[0] - p4[0])**2
                            + (p1[1] - p4[1])**2 + (p1[2] - p4[2])**2))
-            dip2 = np.arcsin((p3[2] - p2[2]) / np.sqrt( (p2[0] - p3[0])**2 
+            dip2 = np.arcsin((p3[2] - p2[2]) / np.sqrt( (p2[0] - p3[0])**2
                            + (p2[1] - p3[1])**2 + (p2[2] - p3[2])**2))
             dip = 0.5 * (dip1 + dip2)
-            
-            # 4. compute the position of the bottom corners  
+
+            # 4. compute the position of the bottom corners
             width = np.sqrt((p1[0] - p4[0])**2 + (p1[1] - p4[1])**2 + (p1[2] - p4[2])**2)
             wc = width * np.cos(dip)
             ws = width * np.sin(dip)
@@ -686,11 +692,11 @@ class RectangularPatches(Fault):
             y4 = y1 - wc * np.sin(strike)
             z4 = z1 + ws
             pt3 = [x3, y3, z3]
-            pt4 = [x4, y4, z4]            
-            
+            pt4 = [x4, y4, z4]
+
             # set up the patch
             self.equivpatch.append(np.array([pt1, pt2, pt3, pt4]))
-            
+
             # Deal with the lon lat
             lon1, lat1 = self.xy2ll(x1, y1)
             lon2, lat2 = self.xy2ll(x2, y2)
@@ -700,7 +706,7 @@ class RectangularPatches(Fault):
             pt2 = [lon2, lat2, z2]
             pt3 = [lon3, lat3, z3]
             pt4 = [lon4, lat4, z4]
-            
+
             # set up the patchll
             self.equivpatchll.append(np.array([pt1, pt2, pt3, pt4]))
 
@@ -712,8 +718,8 @@ class RectangularPatches(Fault):
     # Create a patch
     def lonlat2patch(self, lon, lat, depth, strike, dip, length, width):
         '''
-        Builds a patch from its longitude {lon}, latitude {lat}, 
-        depths {depth}, strike angles {strike}, dip angles {dip}, 
+        Builds a patch from its longitude {lon}, latitude {lat},
+        depths {depth}, strike angles {strike}, dip angles {dip},
         patch length {length} and patch width {width}
 
         Args:
@@ -747,7 +753,7 @@ class RectangularPatches(Fault):
         xcd = xc + width/2.*np.cos(dip)*np.cos(strike)
         ycd = yc - width/2.*np.cos(dip)*np.sin(strike)
         zcd = zc - width/2.*np.sin(dip)
-        
+
         # Calculate the 2 upper corners
         x1 = xcu - length/2.*np.sin(strike)
         y1 = ycu - length/2.*np.cos(strike)
@@ -788,10 +794,10 @@ class RectangularPatches(Fault):
 
     # ----------------------------------------------------------------------
     # Given lon, lat, etc arrays, builds patches
-    def geometry2patch(self, Lon, Lat, Depth, Strike, Dip, Length, Width, 
+    def geometry2patch(self, Lon, Lat, Depth, Strike, Dip, Length, Width,
                              initializeSlip=True):
         '''
-        Builds the list of patches from lists of lon, lat, depth, strike, dip, 
+        Builds the list of patches from lists of lon, lat, depth, strike, dip,
         length and width
 
         Args:
@@ -816,7 +822,7 @@ class RectangularPatches(Fault):
             patch, patchll = self.lonlat2patch(lon, lat, depth, strike, dip, length, width)
             self.patch.append(patch)
             self.patchll.append(patchll)
-        
+
         # Initialize Slip
         if initializeSlip:
             self.initializeslip()
@@ -836,7 +842,7 @@ class RectangularPatches(Fault):
     # Relax type method
     def importPatches(self, filename, origin=[45.0, 45.0]):
         '''
-        Builds a patch geometry and the corresponding files from a relax 
+        Builds a patch geometry and the corresponding files from a relax
         co-seismic file type.
 
         Args:
@@ -885,22 +891,22 @@ class RectangularPatches(Fault):
                 rake = float(text[9])*np.pi/180.
 
                 D.append(depth)
-                
+
                 # Build a patch with that
-                x1 = xtl + length*np.cos(strike) 
+                x1 = xtl + length*np.cos(strike)
                 y1 = ytl + length*np.sin(strike)
                 z1 = depth
                 #z1 = depth + width
 
-                x2 = xtl 
+                x2 = xtl
                 y2 = ytl
                 z2 = depth
 
-                x3 = xtl  
+                x3 = xtl
                 y3 = ytl
                 z3 = depth + width
-                
-                #x3 = xtl + length*np.cos(strike) 
+
+                #x3 = xtl + length*np.cos(strike)
                 #y3 = ytl + length*np.sin(strike)
                 #z3 = depth
 
@@ -937,7 +943,7 @@ class RectangularPatches(Fault):
         # Translate slip to np.array
         self.slip = np.array(self.slip)
 
-        # Depth 
+        # Depth
         D = np.unique(np.array(D))
         self.z_patches = D
         self.depth = D.max()
@@ -953,21 +959,21 @@ class RectangularPatches(Fault):
                 self.lat.append(p[1][1])
         self.lon = np.array(self.lon)
         self.lat = np.array(self.lat)
-    
+
         # All done
         return
     # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------
     # Read patches
-    def readPatchesFromFile(self, filename, Cm=None, readpatchindex=True, 
-                                  inputCoordinates='lonlat', 
+    def readPatchesFromFile(self, filename, Cm=None, readpatchindex=True,
+                                  inputCoordinates='lonlat',
                                   donotreadslip=False, increasingy=True):
         '''
-        Read patches from a GMT formatted file. This means the file is a 
-        list of patches separated by '>'. 
+        Read patches from a GMT formatted file. This means the file is a
+        list of patches separated by '>'.
 
-        Args:   
+        Args:
             * filename      : Name of the file.
 
         Kwargs:
@@ -988,8 +994,8 @@ class RectangularPatches(Fault):
             Slip = []
 
         # open the files
-        fin = open(filename, 'r') 
-        
+        fin = open(filename, 'r')
+
         # Assign posterior covariances
         if Cm!=None: # Slip
             self.Cm = np.array(Cm)
@@ -1003,7 +1009,7 @@ class RectangularPatches(Fault):
         # Loop over the file
         i = 0
         while i<len(A):
-            
+
             # Assert it works
             assert A[i].split()[0]=='>', 'Not a patch, reformat your file...'
             # Get the Patch Id
@@ -1105,7 +1111,7 @@ class RectangularPatches(Fault):
 
     # ----------------------------------------------------------------------
     # Write patches to a GMT style file
-    def writePatches2File(self, filename, add_slip=None, scale=1.0, 
+    def writePatches2File(self, filename, add_slip=None, scale=1.0,
                                 patch='normal', stdh5=None, decim=1):
         '''
         Writes the patch corners in a file that can be used in psxyz.
@@ -1172,7 +1178,7 @@ class RectangularPatches(Fault):
                 string = '-Z{}'.format(slp)
 
             # Put the parameter number in the file as well if it exists
-            parameter = ' ' 
+            parameter = ' '
             if hasattr(self,'index_parameter'):
                 i = int(self.index_parameter[p,0])
                 j = int(self.index_parameter[p,1])
@@ -1207,7 +1213,7 @@ class RectangularPatches(Fault):
         if stdh5 is not None:
             h5fid.close()
 
-        # All done 
+        # All done
         return
     # ----------------------------------------------------------------------
 
@@ -1216,9 +1222,9 @@ class RectangularPatches(Fault):
     def writeSlipDirection2File(self, filename, scale=1.0, factor=1.0, neg_depth=False, ellipse=False, flipstrike=False,nsigma=1.):
         '''
 
-        Write a psxyz compatible file to draw lines starting from the center of each patch, 
+        Write a psxyz compatible file to draw lines starting from the center of each patch,
         indicating the direction of slip. Tensile slip is not used...
-        
+
         Args:
             * filename      : Name of the output file
 
@@ -1246,7 +1252,7 @@ class RectangularPatches(Fault):
 
         # Loop over the patches
         for p in self.slipdirection:
-            
+
             # Write the > sign to the file
             fout.write('> \n')
 
@@ -1273,17 +1279,17 @@ class RectangularPatches(Fault):
 
             # Loop over the patches
             for e in self.ellipse:
-                
+
                 # Get ellipse points
                 ex, ey, ez = e[:,0],e[:,1],e[:,2]
-                
+
                 # Depth
                 if neg_depth:
                     ez = -1.0 * ez
 
                 # Conversion to geographical coordinates
                 lone,late = self.xy2ll(ex, ey)
-                
+
                 # Write the > sign to the file
                 fout.write('> \n')
 
@@ -1291,7 +1297,7 @@ class RectangularPatches(Fault):
                     fout.write('{} {} {} \n'.format(lon, lat, z))
 
             # Close file
-            fout.close()            
+            fout.close()
 
         # All done
         return
@@ -1299,22 +1305,22 @@ class RectangularPatches(Fault):
 
     # ----------------------------------------------------------------------
     def writeSlipCenter2File(self, filename, add_slip=None, scale=1.0, neg_depth=False, addCovar=False):
-                                
+
         '''
-        Write a psxyz, surface or greenspline compatible file with the center 
-        of each patch and magnitude slip. Scale can be a real 
+        Write a psxyz, surface or greenspline compatible file with the center
+        of each patch and magnitude slip. Scale can be a real
         number or a string in 'total', 'strikeslip', 'dipslip' or 'tensile'
 
         Args:
             * filename      : Name of the output file
 
         Kwargs:
-            * add_slip      : Put the slip as a value at the center 
+            * add_slip      : Put the slip as a value at the center
                               Can be None, strikeslip, dipslip, total, coupling
             * scale         : Multiply the slip value by a factor.
             * neg_depth     : if True, depth is a negative nmber
             * addCovar      : add the covariance Cm values to the slip for each patch
-  
+
         Returns:
             * None
         '''
@@ -1322,7 +1328,7 @@ class RectangularPatches(Fault):
         # Write something
         print('Writing slip at patch centers to file {}'.format(filename))
 
-        if addCovar: 
+        if addCovar:
             assert((self.Cm!=None).all()), 'Provide Cm values in fault object'
             print('adding slip covariances\n')
 
@@ -1335,7 +1341,7 @@ class RectangularPatches(Fault):
         for pIndex in range(self.N_slip):
             # Get the center of the patch
             xc, yc, zc, width, length, strike, dip = self.getpatchgeometry(pIndex, center=True)
-            
+
            # Get the slip value to be added
             if add_slip is not None:
                 if add_slip == 'coupling':
@@ -1348,8 +1354,8 @@ class RectangularPatches(Fault):
                     slp = self.slip[pIndex,2]*scale
                 elif add_slip == 'total':
                     slp = np.sqrt(self.slip[pIndex,0]**2 + self.slip[pIndex,1]**2)*scale
- 
-            if addCovar: 
+
+            if addCovar:
                 ssSD = np.sqrt(self.Cm[pIndex,0])*scale
                 dsSD = np.sqrt(self.Cm[pIndex,1])*scale
                 slipCovar = self.Cm[pIndex,2]
@@ -1358,11 +1364,11 @@ class RectangularPatches(Fault):
             lonc, latc = self.xy2ll(xc, yc)
             if neg_depth:
                 zc = -1.0*zc
-                
+
             if addCovar == False:  # write only slip
                 fout.write('{} {} {} {}\n'.format(lonc, latc, zc, slp))
             else:
-                fout.write('{} {} {} {} {} {} {}\n'.format(lonc, latc, zc, slp, 
+                fout.write('{} {} {} {} {} {} {}\n'.format(lonc, latc, zc, slp,
                                 ssSD, dsSD, slipCovar))
 
         # Close file
@@ -1394,12 +1400,12 @@ class RectangularPatches(Fault):
         # Get Cm
         Cm = np.diag(self.Cm[patch,:2])
         Cm[0,1]=Cm[1,0]=self.Cm[patch,2]
-        
+
         # Get strike and dip
-        xc, yc, zc, width, length, strike, dip = self.getpatchgeometry(patch, center=True) 
+        xc, yc, zc, width, length, strike, dip = self.getpatchgeometry(patch, center=True)
         if ellipseCenter!=None:
             xc,yc,zc = ellipseCenter
-        
+
         # Compute eigenvalues/eigenvectors
         D,V=np.linalg.eig(Cm)
         v1 = V[:,0]
@@ -1407,28 +1413,28 @@ class RectangularPatches(Fault):
         b  = nsigma*np.sqrt(np.abs(D[1]))
         phi   = np.arctan2(v1[1],v1[0])
         theta = np.linspace(0,2*np.pi,Npoints);
-    
+
         # The ellipse in x and y coordinates
         Ex = a*np.cos(theta)*factor
         Ey = b*np.sin(theta)*factor
-    
-        # Correlation Rotation     
+
+        # Correlation Rotation
         R  = np.array([[np.cos(phi),-np.sin(phi)],
                        [np.sin(phi),np.cos(phi)]])
-        RE = np.dot(R,np.array([Ex,Ey]))    
-        
+        RE = np.dot(R,np.array([Ex,Ey]))
+
         # Strike/Dip rotation
         ME = np.array([RE[0,:], RE[1,:] * np.cos(dip), RE[1,:]*np.sin(dip)])
         R  = np.array([[np.sin(strike),-np.cos(strike),0.],
                        [np.cos(strike),np.sin(strike) ,0.],
                        [      0.      ,      0.       ,1.]])
         RE = np.dot(R,ME).T
-        
+
         # Translation on Fault
         RE[:,0] += xc
         RE[:,1] += yc
         RE[:,2] += zc
-        
+
         # All done
         return RE
     # ----------------------------------------------------------------------
@@ -1449,23 +1455,23 @@ class RectangularPatches(Fault):
 
         # Create the array
         self.slipdirection = []
-        
+
         # Check Cm if ellipse
         if ellipse:
             self.ellipse = []
             assert((self.Cm!=None).all()), 'Provide Cm values'
 
         # Loop over the patches
-        for p in range(len(self.patch)):  
-            
+        for p in range(len(self.patch)):
+
             # Get some geometry
-            xc, yc, zc, width, length, strike, dip = self.getpatchgeometry(p, center=True)        
-                      
-            
+            xc, yc, zc, width, length, strike, dip = self.getpatchgeometry(p, center=True)
+
+
             # Get the slip vector
-            slip = self.getslip(self.patch[p]) 
+            slip = self.getslip(self.patch[p])
             rake = np.arctan2(slip[1],slip[0])
-            
+
             # Compute the vector
             if flipstrike:
                 x = (np.sin(strike+np.pi)*np.cos(rake) + np.sin(strike+np.pi)*np.cos(dip)*np.sin(rake))
@@ -1475,7 +1481,7 @@ class RectangularPatches(Fault):
                 x = (np.sin(strike)*np.cos(rake) - np.cos(strike)*np.cos(dip)*np.sin(rake))
                 y = (np.cos(strike)*np.cos(rake) + np.sin(strike)*np.cos(dip)*np.sin(rake))
                 z = -1.0*np.sin(dip)*np.sin(rake)
-        
+
             # Scale these
             if scale.__class__ is float:
                 sca = scale
@@ -1496,13 +1502,13 @@ class RectangularPatches(Fault):
             x *= sca
             y *= sca
             z *= sca
-        
-            # update point 
+
+            # update point
             xe = xc + x
             ye = yc + y
-            ze = zc + z                                                                          
- 
-            # Append ellipse 
+            ze = zc + z
+
+            # Append ellipse
             if ellipse:
                 self.ellipse.append(self.getEllipse(p,ellipseCenter=[xe, ye, ze],factor=factor,nsigma=nsigma))
 
@@ -1519,7 +1525,7 @@ class RectangularPatches(Fault):
         '''
         Deletes a patch.
 
-        Args:   
+        Args:
             * patch     : index of the patch to remove.
 
         Returns:
@@ -1527,7 +1533,7 @@ class RectangularPatches(Fault):
         '''
 
         # Remove the patch
-        if len(self.equivpatch)==len(self.patch): # Check if equivpatch exists
+        if hasattr(self, 'equivpatch'): # Check if equivpatch exists
             del self.equivpatch[patch]
             del self.equivpatchll[patch]
         del self.patch[patch]
@@ -1550,7 +1556,7 @@ class RectangularPatches(Fault):
 
         Returns:
             * None
-                
+
         '''
 
         tutu = copy.deepcopy(titi)
@@ -1621,50 +1627,50 @@ class RectangularPatches(Fault):
         # All done
         return
     # ----------------------------------------------------------------------
-        
+
     # ----------------------------------------------------------------------
     # Rotate a point around specified axis
     def pointRotation3D(self, iPatch, iPoint, theta, p_axis1, p_axis2):
         '''
         Rotate a point with an arbitrary axis (fault tip). Used in rotatePatch.
-        
+
         Args:
             * iPatch: index of the patch to be rotated
             * iPoint: index of the patch corner (point) to be rotated
             * theta : angle of rotation in degrees
             * p_axis1 : first point of axis (ex: one side of a fault)
             * p_axis2 : second point to define the axis (ex: the other side of a fault)
-            
+
         Returns:
             * rotated point
 
-        Reference: 'Rotate A Point About An Arbitrary Axis (3D)' (Paul Bourke) 
+        Reference: 'Rotate A Point About An Arbitrary Axis (3D)' (Paul Bourke)
         '''
         def to_radians(angle):
             return np.divide(np.dot(angle, np.pi), 180.0)
-    
+
         def to_degrees(angle):
             return np.divide(np.dot(angle, 180.0), np.pi)
-        
+
         point = self.patch[iPatch][iPoint]
-        
-        # Translate so axis is at origin    
+
+        # Translate so axis is at origin
         p = point - p_axis1
-    
+
         N = p_axis2 - p_axis1
         Nm = np.sqrt(N[0]**2 + N[1]**2 + N[2]**2)
-        
+
         # Rotation axis unit vector
         n = [N[0]/Nm, N[1]/Nm, N[2]/Nm]
-    
-        # Matrix common factors     
+
+        # Matrix common factors
         c = np.cos(to_radians(theta))
         t = 1 - np.cos(to_radians(theta))
         s = np.sin(to_radians(theta))
         X = n[0]
         Y = n[1]
         Z = n[2]
-    
+
         # Matrix 'M'
         d11 = t*X**2 + c
         d12 = t*X*Y - s*Z
@@ -1675,7 +1681,7 @@ class RectangularPatches(Fault):
         d31 = t*X*Z - s*Y
         d32 = t*Y*Z + s*X
         d33 = t*Z**2 + c
-    
+
         #            |p.x|
         # Matrix 'M'*|p.y|
         #            |p.z|
@@ -1683,41 +1689,41 @@ class RectangularPatches(Fault):
         q[0] = d11*p[0] + d12*p[1] + d13*p[2]
         q[1] = d21*p[0] + d22*p[1] + d23*p[2]
         q[2]= d31*p[0] + d32*p[1] + d33*p[2]
-        
-        # Translate axis and rotated point back to original location    
+
+        # Translate axis and rotated point back to original location
         return np.array(q + p_axis1)
-    # ----------------------------------------------------------------------  
-        
+    # ----------------------------------------------------------------------
+
     # ----------------------------------------------------------------------
     # Rotate a patch around specified axis
     def rotatePatch(self, iPatch , theta, p_axis1, p_axis2):
         '''
         Rotate a patch with an arbitrary axis (fault tip)
         Used by class uncertainties
-        
+
         Args:
             * iPatch: index of the patch to be rotated
             * theta : angle of rotation in degrees
             * p_axis1 : first point of axis (ex: one side of a fault)
             * p_axis2 : second point to define the axis (ex: the other side of a fault)
-            
+
         Returns:
             * None
-        '''        
+        '''
         # Calculate rotated patch
         rotated_patch = [self.pointRotation3D(iPatch,0, theta, p_axis1, p_axis2),
                          self.pointRotation3D(iPatch,1, theta, p_axis1, p_axis2),
                          self.pointRotation3D(iPatch,2, theta, p_axis1, p_axis2),
                          self.pointRotation3D(iPatch,3, theta, p_axis1, p_axis2)]
-                         
+
         # Round the solution (sometimes patches corners not at the exact same depth)
         patch = rotated_patch
         for i in range(len(patch)):
             patch[i][2] = np.round(patch[i][2],decimals=3)
-        
+
         if patch[0][2]-patch[1][2]!=0.:
             patch[0][2] = patch[1][2]
-                    
+
         # Replace
         self.patch[iPatch] = patch
 
@@ -1739,7 +1745,7 @@ class RectangularPatches(Fault):
 
         # Replace
         self.patchll[iPatch] = np.array(patchll)
-        return 
+        return
     # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------
@@ -1748,30 +1754,30 @@ class RectangularPatches(Fault):
         '''
         Translate a patch
         Used by class uncertainties
-        
+
         Args:
             * iPatch: index of the patch to be rotated
             * tr_vector: array, translation vector in 3D
-            
+
         Returns:
             * None
-        '''        
+        '''
         # Calculate rotated patch
-        tr_p1 = np.array( [self.patch[iPatch][0][0]+tr_vector[0], 
-                          self.patch[iPatch][0][1]+tr_vector[1], 
+        tr_p1 = np.array( [self.patch[iPatch][0][0]+tr_vector[0],
+                          self.patch[iPatch][0][1]+tr_vector[1],
                           self.patch[iPatch][0][2]+tr_vector[2]])
-        tr_p2 = np.array( [self.patch[iPatch][1][0]+tr_vector[0], 
-                          self.patch[iPatch][1][1]+tr_vector[1], 
+        tr_p2 = np.array( [self.patch[iPatch][1][0]+tr_vector[0],
+                          self.patch[iPatch][1][1]+tr_vector[1],
                           self.patch[iPatch][1][2]+tr_vector[2]])
-        tr_p3 = np.array( [self.patch[iPatch][2][0]+tr_vector[0], 
+        tr_p3 = np.array( [self.patch[iPatch][2][0]+tr_vector[0],
                           self.patch[iPatch][2][1]+tr_vector[1],
                           self.patch[iPatch][2][2]+tr_vector[2]])
-        tr_p4 = np.array( [self.patch[iPatch][3][0]+tr_vector[0], 
+        tr_p4 = np.array( [self.patch[iPatch][3][0]+tr_vector[0],
                           self.patch[iPatch][3][1]+tr_vector[1],
-                           self.patch[iPatch][3][2]+tr_vector[2]]) 
-        
+                           self.patch[iPatch][3][2]+tr_vector[2]])
+
         tr_patch = [tr_p1, tr_p2, tr_p3, tr_p4]
-                                             
+
         # Replace
         self.patch[iPatch] = tr_patch
         # Build the ll patch
@@ -1792,7 +1798,7 @@ class RectangularPatches(Fault):
 
         # Replace
         self.patchll[iPatch] = np.array(patchll)
-        return 
+        return
     # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------
@@ -1871,7 +1877,7 @@ class RectangularPatches(Fault):
     # ----------------------------------------------------------------------
     def chCoordinates(self,p,p_ref,angle_rad):
         '''
-        Returns a coordinate system change. 
+        Returns a coordinate system change.
 
         Args:
             * p : Translation vector
@@ -1885,15 +1891,15 @@ class RectangularPatches(Fault):
             This is a weird method. Who wrote that?
 
         '''
-        
+
         # Translation
         t_p = [p[0]-p_ref[0],p[1]-p_ref[1],p[2]-p_ref[2]]
-        
-        # Rotation 
+
+        # Rotation
         r_p     = [t_p[0]*np.cos(angle_rad) - t_p[1] * np.sin(angle_rad)]
         r_p.append(t_p[0]*np.sin(angle_rad) + t_p[1] * np.cos(angle_rad))
         r_p.append(t_p[2])
-        
+
         # All done
         return r_p
     # ----------------------------------------------------------------------
@@ -1913,8 +1919,8 @@ class RectangularPatches(Fault):
         Returns:
             * x, y, depth, width, length, strike, dip
 
-        When we build the fault, the patches are not exactly rectangular. Therefore, 
-        this routine will return the rectangle that matches with the two shallowest 
+        When we build the fault, the patches are not exactly rectangular. Therefore,
+        this routine will return the rectangle that matches with the two shallowest
         points and that has an average dip angle to match with the other corners.
         '''
 
@@ -1933,17 +1939,17 @@ class RectangularPatches(Fault):
 
         # Get the four corners of the rectangle
         p1, p2, p3, p4 = patch
-        
+
         # Get the UL corner of the patch
         if center:
             x1, x2, x3 = self.getcenter(patch)
         else:
             x1 = p2[0]
             x2 = p2[1]
-            x3 = p2[2]        
+            x3 = p2[2]
 
-        # Get the patch width 
-        width = np.sqrt( (p4[0] - p1[0])**2 + (p4[1] - p1[1])**2 + (p4[2] - p1[2])**2 )   
+        # Get the patch width
+        width = np.sqrt( (p4[0] - p1[0])**2 + (p4[1] - p1[1])**2 + (p4[2] - p1[2])**2 )
 
         # Get the length
         length = np.sqrt( (p2[0] - p1[0])**2 + (p2[1] - p1[1])**2 )
@@ -1954,7 +1960,7 @@ class RectangularPatches(Fault):
 
         # along dip vector
         vd = p4-p1
-        
+
         # Find vector normal to the fault plane
         vnz = vs[1]*vd[0]-vs[0]*vd[1]
 
@@ -2023,7 +2029,7 @@ class RectangularPatches(Fault):
     def distancePatchToPatch(self, patch1, patch2, distance='center', lim=None):
         '''
         Measures the distance between two patches.
-        
+
         Args:
             * patch1    : geometry of the first patch.
             * patch2    : geometry of the second patch.
@@ -2162,7 +2168,7 @@ class RectangularPatches(Fault):
         '''
         This routine read the rectangular geometry.
 
-        :Format: 
+        :Format:
 
         +---+---+-----+-----+-------+------+---+------+----+---+
         |lon|lat|E[km]|N[km]|Dep[km]|strike|dip|length|Area|ID |
@@ -2190,7 +2196,7 @@ class RectangularPatches(Fault):
 
         # Open the output file
         flld = open(filename,'r')
-                
+
         # Loop over the patches
         self.patch     = []
         self.patchll   = []
@@ -2199,7 +2205,7 @@ class RectangularPatches(Fault):
             if l.strip()[0]=='#':
                 continue
             items  = l.strip().split()
-            
+
             # Get patch properties
             lonc   = float(items[0])
             latc   = float(items[1])
@@ -2208,7 +2214,7 @@ class RectangularPatches(Fault):
             dip    = float(items[6])
             if square == True:
                 area = float(items[7])
-                PID = int(items[8])                
+                PID = int(items[8])
                 length = np.sqrt(area)
             else:
                 length = float(items[7])
@@ -2217,10 +2223,10 @@ class RectangularPatches(Fault):
 
             # Length width
             width  = area/length
-            
+
             # Convert patch center to utm coordinates
             xc,yc = self.ll2xy(lonc,latc)
-            
+
             # Build a patch with that
             strike_rad = strike*np.pi/180.
             dip_rad    = dip*np.pi/180.
@@ -2228,12 +2234,12 @@ class RectangularPatches(Fault):
             dstrike_y  =  0.5 * length * np.cos(strike_rad)
             ddip_x     =  0.5 * width  * np.cos(dip_rad) * np.cos(strike_rad)
             ddip_y     = -0.5 * width  * np.cos(dip_rad) * np.sin(strike_rad)
-            ddip_z     =  0.5 * width  * np.sin(dip_rad)    
+            ddip_z     =  0.5 * width  * np.sin(dip_rad)
 
             x1 = np.round(xc - dstrike_x - ddip_x, decimals=4)
             y1 = np.round(yc - dstrike_y - ddip_y, decimals=4)
             z1 = np.round(zc - ddip_z,             decimals=4)
-            
+
             x2 = np.round(xc + dstrike_x - ddip_x, decimals=4)
             y2 = np.round(yc + dstrike_y - ddip_y, decimals=4)
             z2 = np.round(zc - ddip_z            , decimals=4)
@@ -2265,9 +2271,9 @@ class RectangularPatches(Fault):
             pll[3,:] = [lon4, lat4, z4]
             p1,p2,p3,p4 = p
             self.patch.append(p)
-            self.patchll.append(pll)            
-            self.z_patches.append(z1)            
-            
+            self.patchll.append(pll)
+            self.z_patches.append(z1)
+
         # Depth
         depths = [self.getcenter(p)[2] for p in self.patch]
         self.depth = np.max(depths)
@@ -2290,7 +2296,7 @@ class RectangularPatches(Fault):
 
     # ----------------------------------------------------------------------
     def getcenter(self, p, coordinates='xy'):
-        ''' 
+        '''
         Get the center of one rectangular patch.
 
         Args:
@@ -2299,7 +2305,7 @@ class RectangularPatches(Fault):
         Returns:
             * x,y,z  : Coordinates of the center
         '''
-    
+
         # Get center
         p1, p2, p3, p4 = p
 
@@ -2308,7 +2314,7 @@ class RectangularPatches(Fault):
         y = p1[1] + (p3[1] - p1[1])/2.
         z = p1[2] + (p3[2] - p1[2])/2.
 
-        # CHeck 
+        # CHeck
         if coordinates == 'll': x,y = self.xy2ll(x,y)
 
         # All done
@@ -2326,7 +2332,7 @@ class RectangularPatches(Fault):
 
         # Computes the total slip
         self.totalslip = np.sqrt(self.slip[:,0]**2 + self.slip[:,1]**2 + self.slip[:,2]**2)
-    
+
         # All done
         return
     # ----------------------------------------------------------------------
@@ -2358,8 +2364,8 @@ class RectangularPatches(Fault):
     # ----------------------------------------------------------------------
     def surfacesimulation(self, box=None, disk=None, err=None, lonlat=None, npoints=10,
                           slipVec=None, verbose=False):
-        ''' 
-        Takes the slip vector and computes the surface displacement that 
+        '''
+        Takes the slip vector and computes the surface displacement that
         corresponds on a regular grid. Returns a gps object
         Has not been tested in a long time...
 
@@ -2466,13 +2472,13 @@ class RectangularPatches(Fault):
             sys.stdout.flush()
 
         # All done
-        return 
+        return
     # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------
     def AverageAlongStrikeOffsets(self, name, insars, filename, discretized=True, smooth=None):
         '''
-        If the profiles have the lon lat vectors as the fault, 
+        If the profiles have the lon lat vectors as the fault,
         This routines averages it and write it to an output file.
         Weird method, I don't know what it does...
         '''
@@ -2503,14 +2509,14 @@ class RectangularPatches(Fault):
             # initialize average
             av = 0.0
             ni = 0.0
-            
+
             # Get values
             for sar in insars:
                 o = sar.AlongStrikeOffsets[name]['offset'][i]
                 if np.isfinite(o):
                     av += o
                     ni += 1.0
-        
+
             # if not only nan
             if ni>0:
                 d = x[i]
@@ -2545,7 +2551,7 @@ class RectangularPatches(Fault):
             norm = np.sum(dd, axis=1)
             dd = dd/norm[:,None]
             AV[u] = np.dot(dd,AV[u])
-            # List 
+            # List
             D = D.tolist(); AV = AV.tolist(); AZ = AZ.tolist(); LO = LO.tolist(); LA = LA.tolist()
 
         # Open file and write header
@@ -2568,7 +2574,7 @@ class RectangularPatches(Fault):
     def vertshrink1patch(self, ipatch, finalwidth, fixedside='up'):
         '''
         Takes an existing patch and shrinks its size in the vertical direction.
-        This method does not account for the dip angle and just moves the row 
+        This method does not account for the dip angle and just moves the row
         of nodes up or down.
 
         Args:
@@ -2625,7 +2631,7 @@ class RectangularPatches(Fault):
         # Find the southernmost points
         y = np.array([patch[0][1], patch[1][1]])
         imin = y.argmin()
-        
+
         # Take the points we need to move
         if fixedside=='south':
             fpts = np.flatnonzero(y==y[imin])
@@ -2639,7 +2645,7 @@ class RectangularPatches(Fault):
 
         # Deal with the shallow points
         isf = fpts[d[fpts].argmin()]      # Index of the shallow fixed point
-        ism = mpts[d[mpts].argmin()]      # Index of the shallow moving point        
+        ism = mpts[d[mpts].argmin()]      # Index of the shallow moving point
         x1 = patch[isf][0]; y1 = patch[isf][1]
         x2 = patch[ism][0]; y2 = patch[ism][1]
         DL = np.sqrt( (x1-x2)**2 + (y1-y2)**2 ) # Distance between the original points
@@ -2653,7 +2659,7 @@ class RectangularPatches(Fault):
         # Find the southernmost points
         y = np.array([patch[2][1], patch[3][1]])
         imin = y.argmin()
-        
+
         # Take the points we need to move
         if fixedside=='south':
             fpts = np.flatnonzero(y==y[imin])
@@ -2740,10 +2746,10 @@ class RectangularPatches(Fault):
                 xc, yc = self.getcenter(p)[:2]
                 d = scidis.cdist([[xc, yc]], [[self.xi[i], self.yi[i]] for i in range(self.xi.shape[0])])[0]
                 imin1 = d.argmin()
-                dmin1 = d[imin1] 
+                dmin1 = d[imin1]
                 d[imin1] = 99999999.
-                imin2 = d.argmin()  
-                dmin2 = d[imin2]  
+                imin2 = d.argmin()
+                dmin2 = d[imin2]
                 dtot=dmin1+dmin2
                 # Put it along the fault
                 xcd = (self.xi[imin1]*dmin1 + self.xi[imin2]*dmin2)/dtot
@@ -2866,10 +2872,10 @@ class RectangularPatches(Fault):
         if filename is not None:
             fout.close()
 
-        # Stores it 
+        # Stores it
         self.AlongStrike['Depth {}'.format(depth)] = np.array(Var)
 
-        # all done 
+        # all done
         return
     # ----------------------------------------------------------------------
 
@@ -2906,7 +2912,7 @@ class RectangularPatches(Fault):
 
             # Get the values
             self.ExtractAlongStrikeVariationsOnDiscretizedFault(depth=d, filename=None, discret=None)
-        
+
             # If filename, write to it
             if filename is not None:
                 fout.write('> # Depth = {} \n'.format(d))
@@ -2990,13 +2996,13 @@ class RectangularPatches(Fault):
             * p: patch index or the patch.
 
         Returns:
-            * position: Float 
+            * position: Float
 
         '''
 
         import scipy.spatial.distance as scidis
 
-        # Convert patch to index 
+        # Convert patch to index
         if type(p) is not int:
             p = getindex(p)
 
@@ -3018,7 +3024,7 @@ class RectangularPatches(Fault):
 
         # compute the distance
         d = scidis.cdist([[xc, yc]], [[x[i], y[i]] for i in range(x.shape[0])])[0]
-        
+
         # Get the two closest points
         imin1 = d.argmin()
         dmin1 = d[imin1]
@@ -3066,7 +3072,7 @@ class RectangularPatches(Fault):
         self.ShearStrike = np.zeros((nP,))
         self.ShearDip = np.zeros((nP,))
         self.Normal = np.zeros((nP,))
-        
+
         # Get the strike and dip
         angles = np.array([self.getpatchgeometry(p, center=True)[-2:] for p in self.patch])
         strike = angles[:,0]
@@ -3104,7 +3110,7 @@ class RectangularPatches(Fault):
         :Note: Has not been tested in a loooong time...
 
         '''
-    
+
         # Check if Tractions have been computed
         assert hasattr(self, 'Normal'), 'Compute Tractions first...'
 
@@ -3117,15 +3123,15 @@ class RectangularPatches(Fault):
         # Compute the Coulomb failure stress (-1.0 for Normal stress because positive must be compressive)
         self.Coulomb = Sign*np.sqrt(self.ShearStrike**2 + self.ShearDip**2) - friction*self.Normal*-1.0
 
-        # All done 
+        # All done
         return
     # ----------------------------------------------------------------------
-        
+
     # ----------------------------------------------------------------------
     def computeImposedTractionOnEachFaultPatch(self, factor=0.001, mu=30e9, nu=0.25):
         '''
         Uses okada92 to compute the traction change on each patch from slip on the other patches.
-        
+
         :Note: Has not been tested in a loooong time...
 
         Kwargs:
@@ -3146,7 +3152,7 @@ class RectangularPatches(Fault):
         self.ShearDip = np.zeros((nP,))
         self.Normal = np.zeros((nP,))
 
-        # Create a stress object 
+        # Create a stress object
         stress = stressfield('Stress', utmzone=self.utmzone, lon0=self.lon0, lat0=self.lat0)
 
         # Loop on each fault patch
@@ -3183,7 +3189,7 @@ class RectangularPatches(Fault):
         # Restore slip correctly on that fault
         self.slip = Slip
 
-        # Clean up screen 
+        # Clean up screen
         print('')
 
         # all done
@@ -3191,34 +3197,26 @@ class RectangularPatches(Fault):
     # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------
-    def plot(self, figure=134, slip='total', Fault=True, Map=True,
-                 show=True, shadedtopo=None, box=None,
-                 norm=None, linewidth=1.0, plot_on_2d=True, view=None, cmap='jet', shape=(1., 1., 1.),
-                 colorbar=True, cbaxis=[0.1, 0.2, 0.1, 0.02], cborientation='horizontal', cblabel='',
-                 drawCoastlines=True, expand=0.2, figsize=(None, None)):
-            '''
-            Plot the available elements of the fault.
-            
-            Args:
-                * figure        : Number of the figure.
-                * slip          : which slip to plot
-                * Fault         : True to plot the fault, False otherwise
-                * Map           : True to plot the map, False otherwise
-                * equiv         : plot the equivalent patches
-                * show          : True to show the plot, False otherwise
-                * axesscaling   : True to perform axes scaling, False otherwise
-                * shadedtopo    : True to plot shaded topography, False otherwise
-                * norm          : Colorbar limits for slip
-                * linewidth     : width of the lines
-                * plot_on_2d    : True to make a map plot of the fault, False otherwise
-                * colorbar      : True to show colorbar, False otherwise
-                * cbaxis        : Colorbar axis position [left, bottom, width, height]
-                * cborientation : Colorbar orientation ('horizontal' or 'vertical')
-                * cblabel       : Colorbar label
-                * drawCoastlines: True to draw coastlines, False otherwise
-                * expand        : How much to extend the map around the fault (degrees)
-                * figsize       : Figure size (width, height)
-            '''
+    def plot(self, figure=134, slip='total',
+             equiv=False, show=True, axesscaling=True,
+             norm=None, linewidth=1.0, plot_on_2d=True,
+             colorbar=True, cbaxis=[0.1, 0.2, 0.1, 0.02], cborientation='horizontal', cblabel='',
+             drawCoastlines=True, expand=0.2, figsize=(None, None)):
+        '''
+        Plot the available elements of the fault.
+
+        Args:
+            * figure        : Number of the figure.
+            * slip          : which slip to plot
+            * equiv         : plot the equivalent patches
+            * show          : True/False
+            * axesscaling   : Perform axes scaling
+            * Norm          : Colorbar limits for slip
+            * linewidth     : width of the lines
+            * plot_on_2d    : Make a map plot of the fault
+            * drawCoastlines: True/False
+            * expand        : How much to extend the map around the fault (degrees)
+        '''
 
             # Get lons lats
             lonmin = np.min([p[:,0] for p in self.patchll])-expand
@@ -3231,7 +3229,7 @@ class RectangularPatches(Fault):
                 lonmin, lonmax, latmin, latmax = box
 
             # Create a figure
-            fig = geoplot(figure=figure, lonmin=lonmin, lonmax=lonmax, latmin=latmin, latmax=latmax, figsize=figsize, 
+            fig = geoplot(figure=figure, lonmin=lonmin, lonmax=lonmax, latmin=latmin, latmax=latmax, figsize=figsize,
                           Map=Map, Fault=Fault)
 
             # Shaded topo
@@ -3253,7 +3251,7 @@ class RectangularPatches(Fault):
             # View?
             if view is not None:
                 fig.set_view(*view, shape=shape)
-            
+
             # show
             if show:
                 showFig = ['fault']
@@ -3397,7 +3395,7 @@ class RectangularPatches(Fault):
         '''
         This routine is very very particular. It only works with 2 vertical faults.
         It Builds the mapping function from one fault to another, when these are vertical.
-        These two faults must have the same surface trace. If the deep fault has more than one raw of patches, 
+        These two faults must have the same surface trace. If the deep fault has more than one raw of patches,
         it might go wrong and give some unexpected results.
 
         Args:
@@ -3422,7 +3420,7 @@ class RectangularPatches(Fault):
         nDeepPatches = len(deepfault.patch)
 
         # Create the map from under to above
-        Map = np.zeros((nPatches, nDeepPatches)) 
+        Map = np.zeros((nPatches, nDeepPatches))
 
         # Set the top row as the surface trace
         self.surfacePatches2Trace()
@@ -3446,7 +3444,7 @@ class RectangularPatches(Fault):
                 i = np.flatnonzero(x>=self.xi)[-1]
                 # Get the corresponding distance along the fault
                 d = dis[i] + np.sqrt( (x-self.xi[i])**2 + (y-self.yi[i])**2 )
-                # Append 
+                # Append
                 D.append(d)
             # Array unique
             D = np.unique(np.array(D))
@@ -3474,10 +3472,10 @@ class RectangularPatches(Fault):
         distance = np.array(distance)
         deepdistance = np.array(deepdistance)
 
-        self.disdis = distance 
+        self.disdis = distance
         self.deepdis = deepdistance
 
-        # Loop over the patches to find out which are over which 
+        # Loop over the patches to find out which are over which
         for p in range(len(self.patch)):
 
             # Get the patch distances
@@ -3493,7 +3491,7 @@ class RectangularPatches(Fault):
                 Map[p,i1] = 1.0     # All the slip comes from this patch
             else:                   # The shallow patch is on top of several patches
                 # two cases again
-                if np.abs(i2-i1)==1:       # It covers the boundary between 2 patches 
+                if np.abs(i2-i1)==1:       # It covers the boundary between 2 patches
                     delta1 = np.abs(d1-deepdistance[i1][1])
                     delta2 = np.abs(d2-deepdistance[i2][0])
                     total = delta1 + delta2
@@ -3521,7 +3519,7 @@ class RectangularPatches(Fault):
     def mapSlipPlane2Plane(self, fault, interpolation='linear', verbose=False, addlimits=True, smooth=0.1):
         '''
         Maps the slip distribution from fault onto self.
-        Mapping is built by computing the best plane between the two faults, 
+        Mapping is built by computing the best plane between the two faults,
         projecting the center of patches on that plane and doing a simple resampling.
         The closer the two faults, the better...
 
@@ -3628,7 +3626,7 @@ class RectangularPatches(Fault):
         if verbose:
             print('Run the interpolation')
 
-        # 6. Now, resample the slip that is on 
+        # 6. Now, resample the slip that is on
         # 6.0 import scipy
         import scipy.interpolate as sciint
 
@@ -3644,8 +3642,8 @@ class RectangularPatches(Fault):
         fault.inslip = inslip
 
         # 6.1 Create an interpolator
-        minx1 = np.min(fault.x1); normx1 = np.max(fault.x1) - minx1; 
-        minx2 = np.min(fault.x2); normx2 = np.max(fault.x2) - minx2; 
+        minx1 = np.min(fault.x1); normx1 = np.max(fault.x1) - minx1;
+        minx2 = np.min(fault.x2); normx2 = np.max(fault.x2) - minx2;
         fStrikeSlip = sciint.Rbf((fault.x1-minx1)/normx1, (fault.x2-minx2)/normx2, inslip[:,0], function=interpolation, smooth=smooth)
         fDipSlip = sciint.Rbf((fault.x1-minx1)/normx1, (fault.x2-minx2)/normx2, inslip[:,1], function=interpolation, smooth=smooth)
         fTensile = sciint.Rbf((fault.x1-minx1)/normx1, (fault.x2-minx2)/normx2, inslip[:,2], function=interpolation, smooth=smooth)
@@ -3664,7 +3662,7 @@ class RectangularPatches(Fault):
     def strikedip2normal(self, strike, dip):
         '''
         Returns a vector normal to a plane with a given strike and dip.
-        
+
         Args:
             * strike    : Strike angle in radians
             * dip       : Dip angle in radians
@@ -3672,7 +3670,7 @@ class RectangularPatches(Fault):
         Returns:
             * list a 3 components
         '''
-        
+
         # Compute normal
         n1 = np.array([np.sin(dip)*np.cos(strike), -1.0*np.sin(dip)*np.sin(strike), np.cos(dip)])
 
@@ -3694,9 +3692,9 @@ class RectangularPatches(Fault):
         '''
         Computes the adjacency matrix for the fault geometry provided by ndip x nstrike. Values of 0
         indicate no adjacency while values of 1 indicate patches share an edge.
-     
+
         Kwargs:
-            * verbose   : Speak to me 
+            * verbose   : Speak to me
             * patchinc  : For a patch N, if patch N+1 is located along-strike, patchinc should be set to 'alongstrike' (default). If patch N+1 is located along-dip, patchinc should be set to 'alongdip'.
 
         '''
@@ -3720,14 +3718,14 @@ class RectangularPatches(Fault):
 
         # Create the matrix
         Jmat = np.zeros((npatch,npatch), dtype=int)
-        
+
         if 'strike' in patchinc:
             # Set diagonal k = 1
             template = np.ones((nstrike,), dtype=int)
             template[-1] = 0
             repvec = np.tile(template, (1,self.numz)).flatten()[:-1]
             Jmat[range(0,npatch-1),range(1,npatch)] = repvec
-        
+
             # Set diagonal k = nstrike
             nd = np.diag(Jmat, k=nstrike).size
             Jmat[range(0,npatch-nstrike),range(nstrike,npatch)] = np.ones((nd,), dtype=int)
@@ -3738,7 +3736,7 @@ class RectangularPatches(Fault):
             template[-1] = 0
             repvec = np.tile(template, (1,nstrike)).flatten()[:-1]
             Jmat[range(0,npatch-1),range(1,npatch)] = repvec
-        
+
             # Set diagonal k = nstrike
             nd = np.diag(Jmat, k=self.numz).size
             Jmat[range(0,npatch-self.numz),range(self.numz,npatch)] = np.ones((nd,), dtype=int)
@@ -3768,8 +3766,7 @@ class RectangularPatches(Fault):
         '''
 
         # Adjacency Matrix
-        if self.adjacencyMat is None:
-            self.computeAdjacencyMat(verbose=verbose)
+        self.computeAdjacencyMat(verbose=verbose)
         Jmat = self.adjacencyMat
         npatch = Jmat.shape[0]
         assert Jmat.shape[1] == npatch, 'adjacency matrix is not square'
@@ -3814,28 +3811,28 @@ class RectangularPatches(Fault):
 
             # Iterate over the nodes of the patch
             for node, iN in zip(patch, range(len(patch))):
-                
+
                 # Create the distance map
                 Distances = np.array([ [np.sqrt((p[0]-node[0])**2 + (p[1]-node[1])**2 + (p[2]-node[2])**2) for p in pp] for pp in self.patch])
-    
+
                 # Find the nodes that are closer than 'distance' and not 0
                 ipatches, inodes = np.where(np.logical_and(Distances<distance, Distances>0.))
-                
+
                 # If there nothing, do nothing:
                 if ipatches.size>0:
-                    
+
                     # These nodes are the same, so we average them
                     xmean = np.mean([node[0]]+[self.patch[p][n][0] for p,n in zip(ipatches,inodes)])
                     ymean = np.mean([node[1]]+[self.patch[p][n][1] for p,n in zip(ipatches,inodes)])
                     zmean = np.mean([node[2]]+[self.patch[p][n][2] for p,n in zip(ipatches,inodes)])
-    
+
                     # Replace these nodes by the mean position
                     for p,n in zip(ipatches,inodes):
                         self.patch[p][n] = [xmean, ymean, zmean]
                     self.patch[ip][iN][0] = xmean
-                    self.patch[ip][iN][1] = ymean 
+                    self.patch[ip][iN][1] = ymean
                     self.patch[ip][iN][2] = zmean
-        
+
         # All done
         return
     # ----------------------------------------------------------------------
@@ -3863,9 +3860,9 @@ class RectangularPatches(Fault):
         newpatch = np.zeros((4,3))
         newpatchll = np.zeros((4,3))
 
-        # determine which corners are in common, needs at least two        
+        # determine which corners are in common, needs at least two
         if colocated(patch1[0],patch2[3],eps) and colocated(patch1[1],patch2[2],eps): # patch2 is above patch1
-            newpatch[0] = patch2[0]; newpatchll[0] = patch2ll[0] 
+            newpatch[0] = patch2[0]; newpatchll[0] = patch2ll[0]
             newpatch[3] = patch1[3]; newpatchll[3] = patch1ll[3]
             newpatch[2] = patch1[2]; newpatchll[2] = patch1ll[2]
             newpatch[1] = patch2[1]; newpatchll[1] = patch2ll[1]
@@ -3886,7 +3883,7 @@ class RectangularPatches(Fault):
             newpatch[1] = patch1[1]; newpatchll[1] = patch1ll[1]
         else:
             return None
-        
+
 
         # All done
         return newpatch, newpatchll
@@ -3897,7 +3894,7 @@ class RectangularPatches(Fault):
 #   def writeEDKSsubParams(self, data, edksfilename, amax=None, plot=False, w_file=True):
 #       '''
 #       Write the subParam file needed for the interpolation of the green's function in EDKS.
-#       Francisco's program cuts the patches into small patches, interpolates the kernels to get the GFs at each point source, 
+#       Francisco's program cuts the patches into small patches, interpolates the kernels to get the GFs at each point source,
 #       then averages the GFs on the pacth. To decide the size of the minimum patch, it uses St Vernant's principle.
 #       If amax is specified, the minimum size is fixed.
 #       Args:
@@ -3954,7 +3951,7 @@ class RectangularPatches(Fault):
 #       parValues = [ useRecvDir ,  amax ,  EDKSunits ,  EDKSfilename ,  prefix ]
 #       method_par = dict(zip(parNames, parValues))
 #
-#       # Open the EDKSsubParams.py file        
+#       # Open the EDKSsubParams.py file
 #       if w_file:
 #           filename = 'EDKSParams_{}_{}.py'.format(fltname, datname)
 #           fout = open(filename, 'w')
@@ -3971,12 +3968,12 @@ class RectangularPatches(Fault):
 #               fout.write("Amax = None # None computes Amax automatically. \n")
 #           else:
 #               fout.write("Amax = {} # Minimum size for the patch division.\n".format(amax))
-#               
+#
 #           fout.write("EDKSunits = 1000.0 # to convert from kilometers to meters\n")
 #           fout.write("EDKSfilename = '{}'\n".format(edksfilename))
 #           fout.write("prefix = '{}'\n".format(prefix))
 #           fout.write("plotGeometry = {} # set to False if you are running in a remote Workstation\n".format(plot))
-#           
+#
 #           # Close the file
 #           fout.close()
 #
