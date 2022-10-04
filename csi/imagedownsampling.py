@@ -5,23 +5,25 @@ Authors: R. Jolivet, January 2014.
          R. Grandin, April 2015
 '''
 
+import copy
+import multiprocessing as mp
+import os
+import sys
+
+import matplotlib as mpl
+import matplotlib.path as path
+import matplotlib.pyplot as plt
 # Externals
 import numpy as np
 import pyproj as pp
-import matplotlib.pyplot as plt
 import scipy.spatial.distance as distance
-import matplotlib.path as path
-import matplotlib as mpl
-import copy
-import sys
-import os
-import multiprocessing as mp
 
+from .csiutils import _split_seq
+from .imagecovariance import imagecovariance as imcov
 # Personals
 from .insar import insar
 from .opticorr import opticorr
-from .imagecovariance import imagecovariance as imcov
-from .csiutils import _split_seq
+
 
 # Initialize a class for multiprocessing gradient computation
 class mpgradcurv(mp.Process):
@@ -229,7 +231,7 @@ class mpdownsampler(mp.Process):
         if self.downsampler.datatype=='insar':
             self.queue.put([X, Y, Lon, Lat, Wgt, Vel, Err, Los, outBlocks, outBlocksll])
         elif self.downsampler.datatype=='opticorr':
-            self.queue.put([X, Y, Lon, Lat, Wgt, East, North, Err_east, Err_north, 
+            self.queue.put([X, Y, Lon, Lat, Wgt, East, North, Err_east, Err_north,
                         outBlocks, outBlocksll])
 
         # All done
@@ -284,7 +286,7 @@ class imagedownsampling(object):
 
         # Save the image
         self.image = image
-        
+
         # Multiprocessing does not like matplotlib instances so clean it up if you made a plot before
         if hasattr(self.image, 'fig'): del self.image.fig
 
@@ -342,6 +344,7 @@ class imagedownsampling(object):
 
         Kwargs:
             * tolerance     : Between 0 and 1. If 1, all the pixels must have a value so that the box is kept. If 0, no pixels are needed... Default is 0.5
+            * decimorig     : Decimation for plotting purposes only.
             * plot          : True/False
 
         Returns:
@@ -558,7 +561,7 @@ class imagedownsampling(object):
             * tolerance     : Minimum surface covered in a patch to be kept.
             * plot          : Plot the downsampled data (True/False)
 
-        Returns:    
+        Returns:
             * None
         '''
 
@@ -1171,7 +1174,7 @@ class imagedownsampling(object):
         # Get the datasets
         original = self.image
         downsampled = self.newimage
-        
+
         # Get the min max values
         if original.dtype == 'insar':
             minmax = [np.nanmin(original.vel), np.nanmax(original.vel)]
@@ -1180,7 +1183,7 @@ class imagedownsampling(object):
         if norm is None:
             norm = minmax
 
-        # Plot the original 
+        # Plot the original
         original.plot(faults=self.faults, plotType='scatter', norm=norm, title='Original',
                         show=False, drawCoastlines=False, Map=True, Fault=False)
         downsampled.plot(faults=self.faults, plotType='decimate', norm=norm, title='Downsampled',
@@ -1254,6 +1257,8 @@ class imagedownsampling(object):
         for i in u.tolist():
             self.blocks.pop(i-j)
             self.blocksll.pop(i-j)
+            self.Gradient = np.delete(self.Gradient, i-j)
+            self.Curvature = np.delete(self.Curvature, i-j)
             j += 1
 
         # All done
@@ -1268,7 +1273,7 @@ class imagedownsampling(object):
             * lam       : Characteristic distance
 
         Kwargs:
-            * function  : 'exp' (:math:`C = \mu^2 e^{\\frac{-d}{\lambda}}`) or 
+            * function  : 'exp' (:math:`C = \mu^2 e^{\\frac{-d}{\lambda}}`) or
                           'gauss' (:math:`C = \mu^2 e^{\\frac{-d^2}{2\lambda^2}}`)
 
         Returns:
@@ -1405,7 +1410,7 @@ class imagedownsampling(object):
             * None
         '''
 
-        # Check 
+        # Check
         if self.datatype=='opticorr':
             raise NotImplementedError
 
