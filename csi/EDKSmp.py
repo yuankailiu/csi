@@ -3,7 +3,8 @@ A bunch of routines to handle EDKS
 
 Written by F. Ortega in 2010.
 Modified by R. Jolivet in 2014.
-Modified by R. Jolivet in 2017 (multiprocessing added for point dropping)
+Modified by R. Jolivet in 2017 (multiprocessing added for point dropping).
+Modified by L. Pereiaslov in 2022 (Pyrocko's Fomosto could now be used to calculate kernels).
 '''
 
 # Externals
@@ -18,6 +19,9 @@ import subprocess
 # Scipy
 from scipy.io import FortranFile
 import scipy.interpolate as sciint
+
+# Pyrocko
+from pyrocko import gf
 
 # Initialize a class to allow multiprocessing for EDKS interpolation in Python
 class interpolator(mp.Process):
