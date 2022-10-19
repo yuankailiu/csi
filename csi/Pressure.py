@@ -408,7 +408,7 @@ class Pressure(SourceInv):
         self.ellipshape = {'x0': lon1, 'x0m': x1, 'y0': lat1,'y0m': y1,'z0': z1,'ax': ax,'ay': ay, 'az': az, 'dip': dip,'strike': strike,'plunge': plunge}
 
 
-        if self.source is None:
+        if self.source == None:
             self.source = A[1].split()[3]
         elif self.source != A[1].split()[3]:
             raise ValueError("The object type and the source type are not the same. Reinitialize object with source type {}".format(A[1].split()[3]))
@@ -712,7 +712,7 @@ class Pressure(SourceInv):
 
     # ----------------------------------------------------------------------
     def emptyGFs(self, data, vertical=True, slipdir='sd', verbose=True):
-        ''' 
+        '''
         Build zero GFs.
 
         Args:
@@ -743,7 +743,7 @@ class Pressure(SourceInv):
                     x = data.vel_enu.shape[0]*3
                 else:
                     x = data.vel_enu.shape[0]*2
-        
+
             G = {'pressure': np.zeros((x,1))}
 
         # All done
@@ -1160,10 +1160,12 @@ class Pressure(SourceInv):
             # Fill Glocal --- difference between Glocal and big G?
             ec = 0
 
+            # for sp in sliplist:
+            #Nclocal = self.G[data.name]['pressure'].shape[0]
             if self.source == "pCDM":
-                Glocal[:,0] = self.G[data.name]['pressureDVx'].squeeze() #???
-                Glocal[:,1] = self.G[data.name]['pressureDVy'].squeeze() #???
-                Glocal[:,2] = self.G[data.name]['pressureDVz'].squeeze() #???
+                Glocal[:,0] = self.G[data.name]['pressureDVx'] #???
+                Glocal[:,1] = self.G[data.name]['pressureDVy'] #???
+                Glocal[:,2] = self.G[data.name]['pressureDVz'] #???
             else:
                 print(Glocal.shape, self.G[data.name]['pressure'].shape)
                 Glocal[:,0] = self.G[data.name]['pressure'].squeeze() #???
@@ -1337,8 +1339,8 @@ class Pressure(SourceInv):
         if not vertical:
             Ncomp = 2
             Gdp = Gdp[:2,:,:]
-        
-        # Size 
+
+        # Size
         Nparm = Gdp.shape[2]
         Npoints = Gdp.shape[1]
 
@@ -1398,11 +1400,11 @@ class Pressure(SourceInv):
     # ----------------------------------------------------------------------
     def surfacesimulation(self, volume, box=None, disk=None, err=None, lonlat=None, name='simulation', verbose=True):
         '''
-        Takes the source caracteristics and computes the surface displacement that corresponds on a regular grid 
+        Takes the source caracteristics and computes the surface displacement that corresponds on a regular grid
         for a given volume change.
 
         Args:
-            * volume    : Volume change 
+            * volume    : Volume change
 
         Kwargs:
             * box       : Can be a list of [minlon, maxlon, minlat, maxlat, n].
