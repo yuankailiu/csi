@@ -16,11 +16,13 @@ import copy
 from .insar import insar
 from .opticorr import opticorr
 
-# Some Usefull functions    
+# Some Usefull functions
 def costFunction(m, t, function, data, weights, fun):
     sil, sig, lam = m
-    return np.sum(np.sqrt(((data-function(t, 
-        sig, lam, covfn=fun, constant=sil))*weights)**2))
+    if (sil - sig**2) < 0:
+        return 999999999.
+    else:
+        return np.sum(np.sqrt(((data-function(t, sig, lam, covfn=fun, constant=sil))*weights)**2))
 
 def exp_fn(t,sil,sig,lam):
     return sil - (sig**2)*np.exp(-t/lam)
@@ -33,6 +35,12 @@ def covariance(t,sig,lam,covfn='exp',constant=0.):
         return (sig**2)*np.exp(-t/lam)+constant
     elif covfn in ('gauss'):
         return (sig**2)*np.exp(-(t**2)/(2*(lam)**2))+constant
+
+def semivariance(t,sig,lam,covfn='exp',constant=0.):
+    if covfn in ('exp'):
+        return -(sig**2)*np.exp(-t/lam)+constant
+    elif covfn in ('gauss'):
+        return -(sig**2)*np.exp(-(t**2)/(2*(lam)**2))+constant
 
 def ramp_fn(t,a,b,c):
     v = np.array([a,b,c])
@@ -174,15 +182,15 @@ class imagecovariance(object):
             if self.verbose:
                 print('Dealing with data set {}'.format(dname))
             # Create a new data set
-            self.datasets['New One'] = {'x': np.empty(0), 
+            self.datasets['New One'] = {'x': np.empty(0),
                                         'y': np.empty(0),
-                                        'lon': np.empty(0), 
-                                        'lat': np.empty(0), 
+                                        'lon': np.empty(0),
+                                        'lat': np.empty(0),
                                         'data': np.empty(0)}
             # Iterate over the boxes
             for box in self.selectedZones:
                 if self.verbose:
-                    print('     Zone of Interest: {} <= Lon <= {} || {} <= Lat <= {}'.format(box[0], 
+                    print('     Zone of Interest: {} <= Lon <= {} || {} <= Lat <= {}'.format(box[0],
                         box[1], box[2], box[3]))
                 # Get lon lat
                 lon = self.datasets[dname]['lon']
@@ -248,12 +256,12 @@ class imagecovariance(object):
                     Nsamp = d.shape[0]
             else:
                 Nsamp = int(np.floor(frac*x.size))
-            if self.verbose: 
+            if self.verbose:
                 print('Selecting {} random samples to estimate the covariance function'.format(Nsamp))
 
             # Create a vector
             regular = np.vstack((x.squeeze(),y.squeeze(),d.squeeze())).T
-            
+
             # Take a random permutation
             randomized = np.random.permutation(regular)
 
@@ -271,13 +279,13 @@ class imagecovariance(object):
                 G[:,0] = x
                 G[:,1] = y
                 G[:,2] = 1.
-                pars = np.dot(np.dot(np.linalg.inv(np.dot(G.T,G)),G.T),d) 
+                pars = np.dot(np.dot(np.linalg.inv(np.dot(G.T,G)),G.T),d)
                 a, b, c, w, u, v = pars
                 d = d - (a*x + b*y + c + w*x*y + u*x*x + v*y*y)
                 if self.verbose:
-                    print('Estimated Orbital Plane: {}x2 + {}y2 + {}xy + {}x + {}y + {}'.format(u,v,w,a,b,c))  
+                    print('Estimated Orbital Plane: {}x2 + {}y2 + {}xy + {}x + {}y + {}'.format(u,v,w,a,b,c))
                 # Save it
-                data['Ramp'] = [a, b, c, u, v, w]       
+                data['Ramp'] = [a, b, c, u, v, w]
 
             # Build all the permutations
             if self.verbose:
@@ -328,7 +336,7 @@ class imagecovariance(object):
 
         Kwargs:
             * frac      : Size of the fraction of the dataset to take (0 to 1)
-                          frac can be an integer, then it is going to be the number of 
+                          frac can be an integer, then it is going to be the number of
                           pixels used to compute the covariance
             * distmax   : Truncate the covariance function.
             * every     : Binning of the covariance function.
@@ -360,12 +368,12 @@ class imagecovariance(object):
                     Nsamp = d.shape[0]
             else:
                 Nsamp = int(np.floor(frac*x.size))
-            if self.verbose: 
+            if self.verbose:
                 print('Selecting {} random samples to estimate the covariance function'.format(Nsamp))
 
             # Create a vector
             regular = np.vstack((x.squeeze(),y.squeeze(),d.squeeze())).T
-            
+
             # Take a random permutation
             randomized = np.random.permutation(regular)
 
@@ -381,13 +389,13 @@ class imagecovariance(object):
                 G[:,0] = x
                 G[:,1] = y
                 G[:,2] = 1.
-                pars = np.dot(np.dot(np.linalg.inv(np.dot(G.T,G)),G.T),d) 
+                pars = np.dot(np.dot(np.linalg.inv(np.dot(G.T,G)),G.T),d)
                 a = pars[0]; b = pars[1]; c = pars[2]; w = pars[3]
                 d = d - (a*x + b*y + c + w*x*y)
                 if self.verbose:
-                    print('Estimated Orbital Plane: {}xy + {}x + {}y + {}'.format(w,a,b,c))  
+                    print('Estimated Orbital Plane: {}xy + {}x + {}y + {}'.format(w,a,b,c))
                 # Save it
-                data['Ramp'] = [a, b, c, w]       
+                data['Ramp'] = [a, b, c, w]
 
             # Build all the permutations
             if self.verbose:
@@ -404,7 +412,7 @@ class imagecovariance(object):
             dy = y[ii] - y[jj]
             dis = np.sqrt(dx*dx + dy*dy)
 
-            # Compute the semivariogram
+            # Compute the covariogram
             dv = np.abs(d[ii]*d[jj])
 
             # Digitize
@@ -432,9 +440,9 @@ class imagecovariance(object):
         # All done
         return
 
-    def computeCovariance(self, function='exp', ComputeCovar=True, frac=0.4, every=1., distmax=50., rampEst=True, prior=None, tol=1e-10):
+    def computeCovariance(self, function='exp', ComputeSemivar=True, frac=0.4, every=1., distmax=50., rampEst=True, prior=None, tol=1e-10):
         '''
-        Computes the covariance functions.
+        Computes the covariance functions through the semivariance fitting to the semivariograms.
 
         Kwargs:
             * function      : Type of function to fit. Can be 'exp'or 'gauss'.
@@ -450,20 +458,20 @@ class imagecovariance(object):
             * None
         '''
 
-        # Compute the Covariogram
-        if ComputeCovar:
+        # Compute the Semivariogram
+        if ComputeSemivar:
             if self.verbose:
-                print('Computing covariograms')
-            self.empiricalCovariograms(frac=frac, every=every, distmax=distmax, rampEst=rampEst)
+                print('Computing semivariograms')
+            self.empiricalSemivariograms(frac=frac, every=every, distmax=distmax, rampEst=rampEst)
         else: # Check that it's already done
             dname = self.datasets.keys()[0]
-            assert 'Covariogram' in self.datasets[dname].keys(), 'Need to compute the Covariogram first: {}'.format(dname)
+            assert 'Semivariogram' in self.datasets[dname].keys(), 'Need to compute the Semivariogram first: {}'.format(dname)
 
-        # Fit the covariograms
+        # Fit the semivariograms
         if self.verbose:
-            print('Fitting Covariance functions')
+            print('Fitting Semivariance functions')
         for dname in self.datasets:
- 
+
             # Get the dataset
             data = self.datasets[dname]
 
@@ -474,39 +482,18 @@ class imagecovariance(object):
                 idx = len(data['Distance'])
 
             # Get the data
-            y = data['Covariogram'][:idx]
+            y = data['Semivariogram'][:idx]
             x = data['Distance'][:idx]
-            error = data['Covariogram Std'][:idx]
+            error = data['Semivariogram Std'][:idx]
             weights = 1/len(error)
 
             # Save the type of function
             data['function'] = function
 
-            if prior is None:
-                # We need a very starting point
-                # Sill ~ np.mean(y at the end)
-                # Lambda ~ intersect between first slope and 0 axis
-                # Sigma ~ exp(1/2N * (sum(log(y)) + sum(x)/Lambda)
-                u = np.flatnonzero(y>0)
-                ly = np.log(y[u])
-                s0 = np.mean(y[-4:])
-                l0 = self._getl0(dname, s0)
-                m0 = self._getm0(dname, s0, l0)
-                mprior = [s0, m0, l0]
-            else:
-                mprior = prior
-
-            if self.verbose:
-                print('Dataset {}:'.format(dname))
-                print('A prior values: Sill | Sigma | Lambda')
-                print('                 {:4f} | {:5f} | {:6f}'.format(mprior[0], mprior[1], mprior[2]))
-
             # Minimize
-            res = sp.minimize(costFunction, mprior, 
-                    args=(x, covariance, y, weights, function), 
-                    method='SLSQP',
-                    bounds=[[0., np.inf], [0., np.inf], [0., np.inf]], tol=tol, 
-                    options={'maxiter': 200, 'disp': True})
+            res = sp.differential_evolution(costFunction,
+                    args=(x, semivariance, y, weights, function),
+                    bounds=[(0., 9.), (0., 9.), (0.01, 99.)], mutation=1.9)
             pars = res.x
 
             # Save parameters
@@ -516,7 +503,6 @@ class imagecovariance(object):
             data['Sill'] = sill
             data['Sigma'] = sigm
             data['Lambda'] = lamb
-            data['Covariogram'] -= sill
 
             # Print
             if self.verbose:
@@ -526,7 +512,7 @@ class imagecovariance(object):
                 print('     Lambda :  {}'.format(lamb))
 
             # Compute the covariance function
-            data['Semivariogram'] = sill - data['Covariogram']
+            data['Covariogram'] = sill - data['Semivariogram']
 
         # All done
         return
@@ -565,7 +551,7 @@ class imagecovariance(object):
 
         # Case 2: opticorr
         elif image.dtype=='opticorr':
-            
+
             # Create the two names
             dnameEast = dname+' East'
             dnameNorth = dname+' North'
@@ -603,12 +589,12 @@ class imagecovariance(object):
         # Iterates over the datasets
         for dname in self.datasets:
 
-            # Get data 
+            # Get data
             data = self.datasets[dname]
             print('writing covariance output for {}'.format(dname)) # without this line, output was not written in some cases
-            
+
             # continue if nothing has been done
-            if 'Covariogram' not in data.keys():
+            if 'Semivariogram' not in data.keys():
                 print('Nothing to be written for data set {}'.format(dname))
                 continue
 
@@ -618,7 +604,7 @@ class imagecovariance(object):
 
             # Open file
             fout = open(filename, 'w')
-        
+
             # Write stuffs
             fout.write('# Covariance estimated for {}\n'.format(dname))
 
@@ -630,25 +616,25 @@ class imagecovariance(object):
                 fout.write('#       Lambda : {} \n'.format(data['Lambda']))
 
             # Write header
-            header = '# Distance (km) || Covariogram '
-            if 'Semivariogram' in data.keys():
-                header = header + '|| Semivariogram'
+            header = '# Distance (km) || Semivariogram '
+            if 'Covariogram' in data.keys():
+                header = header + '|| Covariogram'
             header = header + '\n'
             fout.write(header)
 
             # Write what is in there
             distance = data['Distance']
-            covar = data['Covariogram']
-            covarstd = data['Covariogram Std']
-            if 'Semivariogram' in data.keys():
-                semivar = data['Semivariogram']
+            semivar = data['Semivariogram']
+            semivarstd = data['Semivariogram Std']
+            if 'Covariogram' in data.keys():
+                covar = data['Covariogram']
             for i in range(distance.shape[0]):
                 d = distance[i]
-                s = covar[i]
-                ss = covarstd[i]
+                s = semivar[i]
+                ss = semivarstd[i]
                 line = '{}     {}     {} '.format(d, s, ss)
-                if 'Semivariogram' in data.keys():
-                    c = semivar[i]
+                if 'Covariogram' in data.keys():
+                    c = covar[i]
                     line = line + '    {}'.format(c)
                 line = line + '\n'
                 fout.write(line)
@@ -659,8 +645,7 @@ class imagecovariance(object):
         # All done
         return
 
-    def plot(self, data='covariance', plotData=False, figure=1, figsize=(10,5),
-             savefig=False, show=True, savedir='./'):
+    def plot(self, data='semivariance', plotData=False, figure=1, savefig=False, show=True, savedir='./'):
         '''
         Plots the covariance function.
 
@@ -722,7 +707,7 @@ class imagecovariance(object):
                     sigm = self.datasets[dname]['Sigma']
                     lamb = self.datasets[dname]['Lambda']
                     function = self.datasets[dname]['function']
-                    fy = sill - covariance(dist, sigm, lamb, covfn=function)
+                    fy = semivariance(dist, sigm, lamb, covfn=function, constant=sill)
                     ax.plot(dist, fy, '-k')
 
             # Plot Covariance
@@ -736,13 +721,13 @@ class imagecovariance(object):
                     sigm = self.datasets[dname]['Sigma']
                     lamb = self.datasets[dname]['Lambda']
                     function = self.datasets[dname]['function']
-                    fy = covariance(dist, sigm, lamb, covfn=function)
+                    fy = sill - semivariance(dist, sigm, lamb, covfn=function, constant=sill)
                     ax.plot(dist, fy, '-r')
 
             # Axes
             ax.axis('auto')
 
-            # Increase 
+            # Increase
             ii += 1
 
         # Save?
@@ -785,14 +770,14 @@ class imagecovariance(object):
         self.datasets[dname]['Distance'] = tmp[:,0]
         self.datasets[dname]['Covariogram'] = tmp[:,1]
         self.datasets[dname]['Covariogram Std'] = tmp[:,2]
-        
+
         return
 
 
 
     def _buildcov(self, sigma, lamb, func, x, y):
         '''
-        Returns a covariance matrix 
+        Returns a covariance matrix
 
         Args:
             * sigma : Arg #1 of function func
