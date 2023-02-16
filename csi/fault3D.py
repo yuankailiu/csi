@@ -47,9 +47,9 @@ class fault3D(RectangularPatches):
         # Base class init
         super(fault3D,self).__init__(name,
                                      utmzone = utmzone,
-                                     ellps = ellps, 
-                                     lon0 = lon0, 
-                                     lat0 = lat0, 
+                                     ellps = ellps,
+                                     lon0 = lon0,
+                                     lat0 = lat0,
                                      verbose = verbose)
 
         # All done
@@ -58,19 +58,22 @@ class fault3D(RectangularPatches):
 
     # ----------------------------------------------------------------------
     # Computes dip angle at depth z
-    def dipatZ(self, interp, z):
+    def dipatZ(self, dipinterpolator, dipdirinterpolator, z):
         '''
         Uses the interpolator to return the dip angle evolution along strike at depth z.
         The interpolation scheme is piecewise linear.
 
         Args:
 
-            * interp        : Dip interpolation function
-            * z             : Depth.
+            * dipinterpolator           : Dip interpolation function.
+            * dipdirinterpolator        : Dip direction interpolation function.
+            * z                         : Depth.
         '''
 
         # Create a structure
         self.dip = []
+        self.sdr = []
+        self.cdr = []
 
         # Set a distance counter
         dis = 0
@@ -86,10 +89,18 @@ class fault3D(RectangularPatches):
             dis += np.sqrt( (self.xi[i]-xp)**2 + (self.yi[i]-yp)**2 )
 
             # get the dip
-            d = interp(dis, z[i])
+            d = dipinterpolator(dis, z[i])
 
             # store it
             self.dip.append(d)
+
+            # get the dip direction
+            s = np.sin(dipdirinterpolator(dis, z[i]))
+            c = np.cos(dipdirinterpolator(dis, z[i]))
+
+            # store it
+            self.sdr.append(s)
+            self.cdr.append(c)
 
             # Update previous xp, yp
             xp = self.xi[i]; yp = self.yi[i]
@@ -103,19 +114,19 @@ class fault3D(RectangularPatches):
 
     # ----------------------------------------------------------------------
     # Build rectangular patches
-    def buildPatches(self, dip=None, dipdirection=None, every=10, 
-                           minpatchsize=0.00001, trace_tol=0.1, trace_fracstep=0.2, 
+    def buildPatches(self, dip=None, dipdir=None, every=10,
+                           minpatchsize=0.00001, trace_tol=0.1, trace_fracstep=0.2,
                            trace_xaxis='x', trace_cum_error=True):
         '''
         Builds a dipping fault given a certain dip angle evolution. Dip angle is linearly
         interpolated between tying points given as arguments.
 
         Args:
-            * dip               : Dip angle tying points 
+            * dip               : Dip angle tying points
 
                 [[alongstrike, depth, dip], [alongstrike, depth, dip], ..., [alongstrike, depth, dip]]
-                                   
-            * dipdirection      : Direction towards which the fault dips.
+
+            * dipdir            : Direction towards which the fault dips.
             * every             : patch length for the along trace discretization
             * minpatchsize      : minimum patch size
             * trace_tol         : tolerance for the along trace patch discretization optimization
@@ -145,14 +156,15 @@ class fault3D(RectangularPatches):
         # Discretize the surface trace of the fault
         self.discretize(every,trace_tol,trace_fracstep,trace_xaxis,trace_cum_error)
 
-        # degree to rad
-        if dipdirection is not None:
-            dipdirection_rad = dipdirection*np.pi/180.
-            sdr = np.sin(dipdirection_rad)
-            cdr = np.cos(dipdirection_rad)
+        # Build a 2d dip direction interpolator
+        if dipdir is not None:
+            import scipy.interpolate as sciint
+            xy = np.array([ [dipdir[i][0], dipdir[i][1]] for i in range(len(dipdir))])
+            dipdirs = np.array([dipdir[i][2] * np.pi / 180. for i in range(len(dipdir))])
+            dipdirinterpolator = sciint.NearestNDInterpolator(xy, dipdirs)
         else:
-            sdr = 0.
-            cdr = 0.
+            def dipdirinterpolator(d, z):
+                return 90.
 
         # initialize the depth of the top row
         self.zi = np.ones((self.xi.shape))*self.top
@@ -166,8 +178,8 @@ class fault3D(RectangularPatches):
             # Get the depth of the top of the row
             zt = self.zi
 
-            # Compute the dips for this row (it updates xi and yi at the same time)
-            self.dipatZ(dipinterpolator, zt)
+            # Compute the dips and dip directions for this row (it updates xi and yi at the same time)
+            self.dipatZ(dipinterpolator, dipdirinterpolator, zt)
             self.dip *= np.pi/180.
 
             # Get the top of the row
@@ -177,8 +189,8 @@ class fault3D(RectangularPatches):
             zt = self.zi.round(decimals=10)
 
             # Compute the bottom row
-            xb = xt + self.width*np.cos(self.dip)*sdr
-            yb = yt + self.width*np.cos(self.dip)*cdr
+            xb = xt + self.width*np.cos(self.dip)*self.sdr
+            yb = yt + self.width*np.cos(self.dip)*self.cdr
             lonb, latb = self.xy2ll(xb,yb)
             zb = zt + self.width*np.sin(self.dip)
 
@@ -205,7 +217,7 @@ class fault3D(RectangularPatches):
                 z3 = zb[j+1]
                 lon3 = lonb[j+1]
                 lat3 = latb[j+1]
-                # 4th corner 
+                # 4th corner
                 x4 = xb[j]
                 y4 = yb[j]
                 z4 = zb[j]
@@ -254,7 +266,7 @@ class fault3D(RectangularPatches):
 
         # Compute the equivalent rectangles
         self.computeEquivRectangle()
-    
+
         # All done
         return
     # ----------------------------------------------------------------------
