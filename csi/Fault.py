@@ -883,11 +883,6 @@ class Fault(SourceInv):
         fout = open(filename, 'w')
 
         # Write
-        if ref in ('utm'):
-            fout.write('x y\n')
-        elif ref in ('lonlat'):
-            fout.write('lon lat\n')
-
         for i in range(x.shape[0]):
             fout.write('{} {} \n'.format(x[i], y[i]))
 
@@ -1006,9 +1001,9 @@ class Fault(SourceInv):
             data.setGFsInFault(self, G, vertical=vertical)
             return
 
-        # Chech something
+        # Check something
         if self.patchType == 'triangletent':
-            assert (method in ('edks', 'EDKS', 'pyedks', 'pythonedks', 'fmst', 'fomosto')), 'Homogeneous case not implemented for {} faults'.format(self.patchType)
+            assert method in ('edks', 'fmst'), 'Homogeneous case not implemented for {} faults'.format(self.patchType)
 
         # Check something
         if method in ('homogeneous', 'Homogeneous'):
@@ -1557,9 +1552,10 @@ class Fault(SourceInv):
                 iGss = np.array(sum_layered_fomosto(xs, ys, zs, strike, dip, np.zeros(dip.shape), Areas, slip, xr, yr, stratKernels))
             if verbose:
                 print('Summing sub-sources...')
-            Gss = np.zeros((3, iGss.shape[1],np.unique(Ids).shape[0]))
-            for Id in np.unique(Ids):
-                Gss[:,:,Id] = np.sum(iGss[:,:,np.flatnonzero(Ids==Id)], axis=2)
+            Gss = np.zeros((3, iGss.shape[1], np.unique(Ids).shape[0]))
+            self.Ids = np.unique(Ids)
+            for i, Id in enumerate(self.Ids):
+                Gss[:, : , i] = np.sum(iGss[:, :, np.flatnonzero(Ids==Id)], axis=2)
             del iGss
         else:
             Gss = np.zeros((3, len(data.x), len(self.patch)))
@@ -1585,8 +1581,9 @@ class Fault(SourceInv):
             if verbose:
                 print('Summing sub-sources...')
             Gds = np.zeros((3, iGds.shape[1], np.unique(Ids).shape[0]))
-            for Id in np.unique(Ids):
-                Gds[:,:,Id] = np.sum(iGds[:,:,np.flatnonzero(Ids==Id)], axis=2)
+            self.Ids = np.unique(Ids)
+            for i, Id in enumerate(np.unique(Ids)):
+                Gds[:, :, i] = np.sum(iGds[:, :, np.flatnonzero(Ids==Id)], axis=2)
             del iGds
         else:
             Gds = np.zeros((3, len(data.x), len(self.patch)))
@@ -2266,7 +2263,7 @@ class Fault(SourceInv):
         if type(datas) is not list:
             datas = [datas]
 
-        # Get the total number of data (dependence on d instead of G)
+        # Get the total number of data (based on d instead of G)
         Nd = self.dassembled.shape[0]
         Cd = np.zeros((Nd, Nd))
 

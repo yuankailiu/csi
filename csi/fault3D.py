@@ -58,16 +58,16 @@ class fault3D(RectangularPatches):
 
     # ----------------------------------------------------------------------
     # Computes dip angle at depth z
-    def dipatZ(self, dipinterpolator, dipdirinterpolator, z):
+    def dipatZ(self, dipinterp, dipdirinterp, z):
         '''
         Uses the interpolator to return the dip angle evolution along strike at depth z.
         The interpolation scheme is piecewise linear.
 
         Args:
 
-            * dipinterpolator           : Dip interpolation function.
-            * dipdirinterpolator        : Dip direction interpolation function.
-            * z                         : Depth.
+            * dipinterp           : Dip interpolation function.
+            * dipdirinterp        : Dip direction interpolation function.
+            * z                   : Depth.
         '''
 
         # Create a structure
@@ -89,14 +89,14 @@ class fault3D(RectangularPatches):
             dis += np.sqrt( (self.xi[i]-xp)**2 + (self.yi[i]-yp)**2 )
 
             # get the dip
-            d = dipinterpolator(dis, z[i])
+            d = dipinterp(dis, z[i])
 
             # store it
             self.dip.append(d)
 
             # get the dip direction
-            s = np.sin(dipdirinterpolator(dis, z[i]))
-            c = np.cos(dipdirinterpolator(dis, z[i]))
+            s = np.sin(dipdirinterp(dis, z[i]))
+            c = np.cos(dipdirinterp(dis, z[i]))
 
             # store it
             self.sdr.append(s)
@@ -125,7 +125,6 @@ class fault3D(RectangularPatches):
             * dip               : Dip angle tying points
 
                 [[alongstrike, depth, dip], [alongstrike, depth, dip], ..., [alongstrike, depth, dip]]
-
             * dipdir            : Direction towards which the fault dips.
             * every             : patch length for the along trace discretization
             * minpatchsize      : minimum patch size
