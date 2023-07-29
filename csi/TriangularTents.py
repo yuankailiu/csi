@@ -897,6 +897,11 @@ class TriangularTents(TriangularPatches):
             * None
         '''
 
+        tracedstks = []
+        for xi, yi in zip(self.xi, self.yi):
+            dstk, dacr = self.distance2trace(xi, yi, coord='xy')
+            tracedstks.append(dstk)
+
         tents2delete = []
         dstks = []
         ddips = []
@@ -906,7 +911,7 @@ class TriangularTents(TriangularPatches):
             dstks.append(dstk)
             ddips.append(ddip)
         for tid, (dstk, ddip) in enumerate(zip(dstks, ddips)):
-            if (np.abs(dstk - np.min(dstks)) < 1. or np.abs(dstk - np.max(dstks)) < 1. or np.abs(ddip - np.max(ddips)) < 1.): 
+            if (dstk <= np.min(tracedstks) or dstk >= np.max(tracedstks) or np.abs(ddip - np.max(ddips)) < 1.): 
                 tents2delete.append(tid)
                 self.N_slip -= 1
 
@@ -1130,14 +1135,14 @@ class TriangularTents(TriangularPatches):
         for adja in self.adjacentTents:
             # Counting Laplacian
             if method=='count':
-                D[i,i] = 2*float(len(adja))
-                D[i,adja] = -2./float(len(adja))
+                D[i, i] = 2.
+                D[i, adja] = -2. / float(len(adja))
             # Distance-based
             elif method=='distance':
-                distances = self.Distances[i]/normalizer
+                distances = self.Distances[i] / normalizer
                 E = np.sum(distances)
-                D[i,i] = float(len(adja))*2./E * np.sum(1./distances)
-                D[i,adja] = -2./E * 1./distances
+                D[i, i] = 2. / E * np.sum(1. / distances)
+                D[i, adja] = -2. / E * 1. / distances
 
             # Increment 
             i += 1
