@@ -249,6 +249,15 @@ class imagecovariance(object):
             y = data['y']
             d = data['data']
 
+            # only use the non-outliers for empiricalSemivariograms
+            ad  = np.abs(d - np.nanmedian(d))
+            mad = np.nanmedian(ad)
+            use = ad < 3 * mad
+            print(f'preselect only {np.sum(use)}/{len(x)} pixels to in empiricalSemivariograms()')
+            x = x[use]
+            y = y[use]
+            d = d[use]
+
             # How many samples do we use
             if type(frac) is int:
                 Nsamp = frac
@@ -614,6 +623,8 @@ class imagecovariance(object):
                 fout.write('#       Sill   : {} \n'.format(data['Sill']))
                 fout.write('#       Sigma  : {} \n'.format(data['Sigma']))
                 fout.write('#       Lambda : {} \n'.format(data['Lambda']))
+                if 'Ramp' in data.keys():
+                    fout.write('# Best fit ramp params : {} \n'.format(' '.join(str(pp) for pp in data['Ramp'])))
 
             # Write header
             header = '# Distance (km) || Semivariogram '
@@ -645,7 +656,8 @@ class imagecovariance(object):
         # All done
         return
 
-    def plot(self, data='semivariance', plotData=False, figure=1, savefig=False, show=True, savedir='./'):
+    def plot(self, data='semivariance', plotData=False, figure=1, figsize=(10,5),
+             savefig=False, show=True, savedir='./'):
         '''
         Plots the covariance function.
 
@@ -727,10 +739,11 @@ class imagecovariance(object):
             # Axes
             from matplotlib.ticker import FormatStrFormatter
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.0e'))
-            ax.axis('tight')
+            #ax.axis('tight')
             ax.patch.set(lw=1, ec='black')
-            ax.set_xlabel('Distance (km)')
-            ax.set_ylabel('Value (m$^2$)')
+            ax.set_xlabel('Distance')
+            ax.set_ylabel('Variance')
+            ax.axis('auto')
 
             # Increase
             ii += 1
@@ -765,18 +778,22 @@ class imagecovariance(object):
 
         tmp = np.loadtxt(filename,comments='#')
 
+        l2 = linecache.getline(filename,2)
         l3 = linecache.getline(filename,3)
         l4 = linecache.getline(filename,4)
         l5 = linecache.getline(filename,5)
+        l6 = linecache.getline(filename,6)
 
-        self.datasets[dname]['function'] = 'gauss'
+        self.datasets[dname]['function'] = str(l2.split()[-1][:-1])
         self.datasets[dname]['Sill'] = float(l3.split()[-1])
         self.datasets[dname]['Sigma'] = float(l4.split()[-1])
         self.datasets[dname]['Lambda'] = float(l5.split()[-1])
         self.datasets[dname]['Distance'] = tmp[:,0]
         self.datasets[dname]['Semivariogram'] = tmp[:,1]
         self.datasets[dname]['Semivariogram Std'] = tmp[:,2]
-
+        self.datasets[dname]['Covariogram'] = tmp[:,3]
+        if l6.startswith('# Best fit ramp params'):
+            self.datasets[dname]['Ramp'] = l6.split(':')[-1].split()
         return
 
 
