@@ -53,11 +53,12 @@ class mpgradcurv(mp.Process):
 
     def run(self):
         '''
-        Runs the gradient/curvature computation
+        Runs the gradient/curvature/variance computation
         '''
 
         gradient = []
         curvature = []
+        variance = []  # New list to store variance
 
         # Over each block, we average the position and the phase to have a new point
         for i in self.indexes:
@@ -67,6 +68,7 @@ class mpgradcurv(mp.Process):
 
                 gradient.append(0.0)
                 curvature.append(0.0)
+                variance.append(0.0)  # Zero variance for minimum size blocks
 
             else:
 
@@ -85,35 +87,44 @@ class mpgradcurv(mp.Process):
                     # Find those who are inside
                     ii = p.contains_points(self.downsampler.PIXXY)
                     # Check if total area is sufficient
-                    check = self.downsampler._isItAGoodBlock(block,
-                            np.flatnonzero(ii).shape[0])
+                    check = self.downsampler._isItAGoodBlock(block, np.flatnonzero(ii).shape[0])
                     if check:
-                        if self.downsampler.datatype=='insar':
+                        if self.downsampler.datatype == 'insar':
                             vel = np.mean(self.downsampler.image.vel[ii])
                             means.append(vel)
-                        elif self.datatype=='opticorr':
+                        elif self.downsampler.datatype == 'opticorr':
                             east = np.mean(self.downsampler.image.east[ii])
                             north = np.mean(self.downsampler.image.north[ii])
-                            means.append(np.sqrt(east**2+north**2))
+                            means.append(np.sqrt(east**2 + north**2))
                         xg.append(np.mean(self.downsampler.image.x[ii]))
                         yg.append(np.mean(self.downsampler.image.y[ii]))
                 means = np.array(means)
 
-                # estimate gradient
-                if len(xg)>=2:
-                    A = np.zeros((len(xg),3))
-                    A[:,0] = 1.
-                    A[:,1] = xg
-                    A[:,2] = yg
-                    cffs = np.linalg.lstsq(A,means,rcond=None)
-                    gradient.append(np.abs(np.mean(cffs[0][1:])))
-                    curvature.append(np.std(means - np.dot(A,cffs[0])))
+                # Estimate gradient, curvature, and variance
+                if len(xg) >= 2:
+                    A = np.zeros((len(xg), 3))
+                    A[:, 0] = 1.
+                    A[:, 1] = xg
+                    A[:, 2] = yg
+                    cffs = np.linalg.lstsq(A, means, rcond=None)[0]
+                    gradient.append(np.abs(np.mean(cffs[1:])))
+                    curvature.append(np.std(means - np.dot(A, cffs)))
+                    # Compute variance of the original data within the block
+                    ii_block = path.Path(block, closed=False).contains_points(self.downsampler.PIXXY)
+                    if self.downsampler.datatype == 'insar':
+                        block_data = self.downsampler.image.vel[ii_block]
+                    elif self.downsampler.datatype == 'opticorr':
+                        east = self.downsampler.image.east[ii_block]
+                        north = self.downsampler.image.north[ii_block]
+                        block_data = np.sqrt(east**2 + north**2)
+                    variance.append(np.var(block_data) if len(block_data) > 1 else 0.0)
                 else:
                     gradient.append(0.)
                     curvature.append(0.)
+                    variance.append(0.)
 
-        # Save gradient
-        self.queue.put([gradient, curvature, self.indexes])
+        # Save gradient, curvature, and variance
+        self.queue.put([gradient, curvature, variance, self.indexes])
 
         # All done
         return
@@ -322,8 +333,9 @@ class imagedownsampling(object):
                       [lonmax, latmin]]
 
         # Get the original pixel spacing
-        self.spacing = distance.cdist([[image.x[0], image.y[0]]], [[image.x[i], image.y[i]] for i in range(1, image.x.shape[0])])[0]
-        self.spacing = self.spacing.min()
+        all_distances = distance.cdist([[image.x[0], image.y[0]]], [[image.x[i], image.y[i]] for i in range(1, image.x.shape[0])])[0]
+        all_distances = all_distances[all_distances > 1e-9] # find non-zero distances, with some decimal point tolerance
+        self.spacing  = all_distances.min()
 
         if self.verbose:
             print('Effective pixel spacing: {}'.format(self.spacing))
@@ -344,7 +356,6 @@ class imagedownsampling(object):
 
         Kwargs:
             * tolerance     : Between 0 and 1. If 1, all the pixels must have a value so that the box is kept. If 0, no pixels are needed... Default is 0.5
-            * decimorig     : Decimation for plotting purposes only.
             * plot          : True/False
 
         Returns:
@@ -664,7 +675,7 @@ class imagedownsampling(object):
         # Compute the position of the center
         xsc, ysc = self.getblockcenter(block)
         #Where is the large block touching the smaller blocks? [top/bottom/left/right]
-        touch = top
+        touch = 'top'
         # Form the 3 blocks (if the block is touched by smaller blocks beneath it)
         if touch=='bottom':
             bs1 = [ [xs1, ys1],
@@ -811,8 +822,9 @@ class imagedownsampling(object):
         Bsize = self._is_minimum_size(self.blocks)
 
         # Gradient (if we cannot compute the gradient, the value is zero, so the algo stops)
-        self.Gradient = np.ones(len(self.blocks,))*1e7
-        self.Curvature = np.ones(len(self.blocks,))*1e7
+        self.Gradient = np.ones(len(self.blocks,)) * 1e7
+        self.Curvature = np.ones(len(self.blocks,)) * 1e7
+        self.Variance = np.ones(len(self.blocks)) * 1e7  # New attribute for variance
 
         # Create a queue to hold the results
         output = mp.Queue()
@@ -832,9 +844,10 @@ class imagedownsampling(object):
 
         # Collect
         for w in range(nworkers):
-            gradient, curvature, igrad = output.get()
+            gradient, curvature, variance, igrad = output.get()
             self.Gradient[igrad] = gradient
             self.Curvature[igrad] = curvature
+            self.Variance[igrad] = variance  # Store variance
 
         # Smooth?
         if smooth is not None:
@@ -843,18 +856,19 @@ class imagedownsampling(object):
             gauss = np.exp(-0.5*Distances/(smooth**2))
             self.Gradient = np.dot(gauss, self.Gradient)/np.sum(gauss, axis=1)
             self.Curvature = np.dot(gauss, self.Curvature)/np.sum(gauss, axis=1)
+            self.Variance = np.dot(gauss, self.Variance) / np.sum(gauss, axis=1)
 
         # All done
         return
 
     def dataBased(self, threshold, plot=False, verboseLevel='minimum', quantity='curvature', smooth=None, itmax=100):
         '''
-        Iteratively downsamples the dataset until value compute inside each block is lower than the threshold.
-        Threshold is based on the gradient or curvature of the phase field inside the block.
-        The algorithm is based on the varres downsampler. Please check at http://earthdef.caltech.edu
+        Iteratively downsamples the dataset until value computed inside each block is lower than the threshold.
+        Threshold is based on the gradient, curvature, or variance of the phase field inside the block.
+        If quantity='uniform', performs a single uniform downsampling with threshold as the approximate block size.
 
         Args:
-            * threshold     : Gradient threshold
+            * threshold     : Threshold value for the chosen quantity, or block size if quantity='uniform'
 
         Kwargs:
             * plot          : True/False
@@ -872,29 +886,41 @@ class imagedownsampling(object):
             print ("---------------------------------")
             print ("Downsampling Iterations")
 
-        # Creates the variable that is supposed to stop the loop
-        # Check = [False]*len(self.blocks)
-        self.Gradient = np.ones(len(self.blocks),)*(threshold+1.)
-        self.Curvature = np.ones(len(self.blocks),)*(threshold+1.)
+        # Handle uniform downsampling
+        if quantity == 'uniform':
+            self.initialstate(startingsize=threshold, minimumsize=threshold, tolerance=0.008, plot=False)
+            self.downsample(plot=plot)
+            if self.verbose:
+                print(f"Uniform downsampling with block size ~{threshold} km, {len(self.blocks)} samples")
+            return  # Exit after single pass
+
+        # Existing iterative logic
         do_cut = False
 
         # counter
         it = 0
 
         # Check
-        if quantity=='curvature':
-            testable = self.Curvature
-        elif quantity=='gradient':
-            testable = self.Gradient
+        if quantity == 'curvature':
+            testable = np.ones(len(self.blocks)) * (threshold + 1.)
+            attr_name = 'Curvature'
+        elif quantity == 'gradient':
+            testable = np.ones(len(self.blocks)) * (threshold + 1.)
+            attr_name = 'Gradient'
+        elif quantity == 'variance':
+            testable = np.ones(len(self.blocks)) * (threshold + 1.)
+            attr_name = 'Variance'
+        else:
+            raise ValueError("quantity must be 'gradient', 'curvature', 'variance', or 'uniform'")
 
         # Check if block size is minimum
         Bsize = self._is_minimum_size(self.blocks)
 
         # Loops until done
-        while not (testable<threshold).all() and it<itmax:
+        while not (testable < threshold).all() and it < itmax:
 
             # Check
-            assert testable.shape[0]==len(self.blocks), 'Gradient vector has a size different than number of blocks'
+            assert testable.shape[0] == len(self.blocks), f'{attr_name} vector has a size different than number of blocks'
 
             # Cut if asked
             if do_cut:
@@ -903,7 +929,7 @@ class imagedownsampling(object):
                 # Iterate over blocks
                 for j in range(len(self.blocks)):
                     block = self.blocks[j]
-                    if (testable[j]>threshold) and not Bsize[j]:
+                    if (testable[j] > threshold) and not Bsize[j]:
                         b1, b2, b3, b4 = self.cutblockinfour(block)
                         newblocks.append(b1)
                         newblocks.append(b2)
@@ -925,17 +951,13 @@ class imagedownsampling(object):
 
             # Compute resolution
             self.computeGradientCurvature(smooth=smooth)
-            if quantity=='curvature':
-                testable = self.Curvature
-            elif quantity=='gradient':
-                testable = self.Gradient
 
             # initialize
+            testable = getattr(self, attr_name)
             Bsize = self._is_minimum_size(self.blocks)
 
-            if self.verbose and verboseLevel!='minimum':
-                sys.stdout.write(' ===> Resolution from {} to {}, Mean = {} +- {} \n'.format(testable.min(),
-                    testable.max(), testable.mean(), testable.std()))
+            if self.verbose and verboseLevel != 'minimum':
+                sys.stdout.write(f' ===> {quantity.capitalize()} from {testable.min()} to {testable.max()}, Mean = {testable.mean()} +- {testable.std()} \n')
                 sys.stdout.flush()
 
             # Plot at the end of that iteration
