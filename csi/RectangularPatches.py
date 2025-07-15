@@ -3004,7 +3004,7 @@ class RectangularPatches(Fault):
 
         # Convert patch to index
         if type(p) is not int:
-            p = getindex(p)
+            p = self.getindex(p)
 
         # Compute the cumulative distance
         if self.xi is None:
@@ -3197,9 +3197,9 @@ class RectangularPatches(Fault):
     # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------
-    def plot(self, figure=134, slip='total',
-             equiv=False, show=True, axesscaling=True,
-             norm=None, linewidth=1.0, plot_on_2d=True,
+    def plot(self, figure=134, slip='total', Fault=True, Map=True,
+             show=True, shadedtopo=None, box=None,
+             norm=None, linewidth=1.0, plot_on_2d=True, view=None, cmap='jet', shape=(1., 1., 1.),
              colorbar=True, cbaxis=[0.1, 0.2, 0.1, 0.02], cborientation='horizontal', cblabel='',
              drawCoastlines=True, expand=0.2, figsize=(None, None)):
         '''
@@ -3208,62 +3208,70 @@ class RectangularPatches(Fault):
         Args:
             * figure        : Number of the figure.
             * slip          : which slip to plot
+            * Fault         : True to plot the fault, False otherwise
+            * Map           : True to plot the map, False otherwise
             * equiv         : plot the equivalent patches
-            * show          : True/False
-            * axesscaling   : Perform axes scaling
-            * Norm          : Colorbar limits for slip
+            * show          : True to show the plot, False otherwise
+            * axesscaling   : True to perform axes scaling, False otherwise
+            * shadedtopo    : True to plot shaded topography, False otherwise
+            * norm          : Colorbar limits for slip
             * linewidth     : width of the lines
-            * plot_on_2d    : Make a map plot of the fault
-            * drawCoastlines: True/False
+            * plot_on_2d    : True to make a map plot of the fault, False otherwise
+            * colorbar      : True to show colorbar, False otherwise
+            * cbaxis        : Colorbar axis position [left, bottom, width, height]
+            * cborientation : Colorbar orientation ('horizontal' or 'vertical')
+            * cblabel       : Colorbar label
+            * drawCoastlines: True to draw coastlines, False otherwise
             * expand        : How much to extend the map around the fault (degrees)
+            * figsize       : Figure size (width, height)
         '''
 
-            # Get lons lats
-            lonmin = np.min([p[:,0] for p in self.patchll])-expand
-            lonmax = np.max([p[:,0] for p in self.patchll])+expand
-            latmin = np.min([p[:,1] for p in self.patchll])-expand
-            latmax = np.max([p[:,1] for p in self.patchll])+expand
+        # Get lons lats
+        lonmin = np.min([p[:,0] for p in self.patchll])-expand
+        lonmax = np.max([p[:,0] for p in self.patchll])+expand
+        latmin = np.min([p[:,1] for p in self.patchll])-expand
+        latmax = np.max([p[:,1] for p in self.patchll])+expand
 
-            if box is not None:
-                assert len(box)==4, 'box must be 4 floats: box = {}'.format(tuple(box))
-                lonmin, lonmax, latmin, latmax = box
+        if box is not None:
+            assert len(box)==4, 'box must be 4 floats: box = {}'.format(tuple(box))
+            lonmin, lonmax, latmin, latmax = box
 
-            # Create a figure
-            fig = geoplot(figure=figure, lonmin=lonmin, lonmax=lonmax, latmin=latmin, latmax=latmax, figsize=figsize,
-                          Map=Map, Fault=Fault)
+        # Create a figure
+        fig = geoplot(figure=figure, lonmin=lonmin, lonmax=lonmax, latmin=latmin, latmax=latmax, figsize=figsize,
+                        Map=Map, Fault=Fault)
 
-            # Shaded topo
-            if shadedtopo is not None: fig.shadedTopography(**shadedtopo)
+        # Shaded topo
+        if shadedtopo is not None: fig.shadedTopography(**shadedtopo)
 
-            # Draw the coastlines
-            if drawCoastlines:
-                fig.drawCoastlines(parallels=None, meridians=None, drawOnFault=True)
+        # Draw the coastlines
+        if drawCoastlines:
+            fig.drawCoastlines(parallels=None, meridians=None, drawOnFault=True)
 
-            # Draw the fault
-            fig.faultpatches(self, slip=slip, norm=norm, colorbar=colorbar, linewidth=linewidth,
-                             cbaxis=cbaxis, cborientation=cborientation, cblabel=cblabel, cmap=cmap,
-                             plot_on_2d=plot_on_2d)
+        # Draw the fault
+        fig.faultpatches(self, slip=slip, norm=norm, colorbar=colorbar, linewidth=linewidth,
+                            cbaxis=cbaxis, cborientation=cborientation, cblabel=cblabel, cmap=cmap,
+                            plot_on_2d=plot_on_2d)
 
-            # Plot the trace of there is one
-            if self.lon is not None:
-                fig.faulttrace(self)
+        # Plot the trace of there is one
+        if self.lon is not None:
+            fig.faulttrace(self)
 
-            # View?
-            if view is not None:
-                fig.set_view(*view, shape=shape)
+        # View?
+        if view is not None:
+            fig.set_view(*view, shape=shape)
 
-            # show
-            if show:
-                showFig = ['fault']
-                if plot_on_2d:
-                    showFig.append('map')
-                fig.show(showFig=showFig)
+        # show
+        if show:
+            showFig = ['fault']
+            if plot_on_2d:
+                showFig.append('map')
+            fig.show(showFig=showFig)
 
-            # Save fig
-            self.fig = fig
+        # Save fig
+        self.fig = fig
 
-            # All done
-            return
+        # All done
+        return
     # ----------------------------------------------------------------------
 
     # ----------------------------------------------------------------------

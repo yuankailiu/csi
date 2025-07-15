@@ -83,12 +83,12 @@ class insar(SourceInv):
         '''
         Pass the position of the stations into the utm coordinate system.
         '''
-        
+
         # Transform
         self.x, self.y = self.ll2xy(self.lon, self.lat)
 
         # All done
-        return 
+        return
 
     def xy2lonlat(self):
         '''
@@ -98,7 +98,7 @@ class insar(SourceInv):
         self.lon, self.lat = self.xy2ll(self.x, self.y)
 
         # all done
-        return 
+        return
 
     def mergeInsar(self, sar):
         '''
@@ -211,23 +211,23 @@ class insar(SourceInv):
             * refect: deletes the pixels if True. If False, returns a list of booleans
         '''
 
-        # Resolution 
+        # Resolution
         if resolution == 'auto' or resolution == 'intermediate':
             resolution = '50m'
         elif resolution == 'coarse' or resolution == 'low':
             resolution = '110m'
-        elif resolution == 'fine':            
+        elif resolution == 'fine':
             resolution = '10m'
         else:
             assert False, 'Unknown resolution : {}'.format(resolution)
 
         # Get data from cartopy
-        land_shp_fname = shpreader.natural_earth(resolution=resolution,                               
-                                                         category='physical', name='land')                    
-        
+        land_shp_fname = shpreader.natural_earth(resolution=resolution,
+                                                         category='physical', name='land')
+
         # Check it
         land_geom = unary_union(list(shpreader.Reader(land_shp_fname).geometries()))
-        land = prep(land_geom)                          
+        land = prep(land_geom)
 
         # cartopy works in -180, 180
         lon = copy.deepcopy(self.lon)
@@ -904,7 +904,7 @@ class insar(SourceInv):
                     finx = netcdf.netcdf_file(los[0])
                     finy = netcdf.netcdf_file(los[1])
                     finz = netcdf.netcdf_file(los[2])
-                # check file organization (assume same for all LOS)    
+                # check file organization (assume same for all LOS)
                 if len(finx.variables['z'].shape)==1:  # 1-d array
                     losx = np.array(finx.variables['z'][:])
                     losy = np.array(finy.variables['z'][:])
@@ -1162,7 +1162,7 @@ class insar(SourceInv):
 
         # Get average
         vel, err, los = self.returnAverageNearPoint(lon, lat, radius)
-    
+
         # Check
         assert vel is not None, 'Referencing impossible for data {}: None'.format(self.name)
         assert not np.isnan(vel), 'Referencing impossible for data {}: NaNs'.format(self.name)
@@ -1192,7 +1192,7 @@ class insar(SourceInv):
 
         # Create a gps object
         from .gps import gps
-        out = gps('{} - {}'.format(self.name, inp.name), lon0=self.lon0, 
+        out = gps('{} - {}'.format(self.name, inp.name), lon0=self.lon0,
                                                          lat0=self.lat0,
                                                          utmzone=self.utmzone,
                                                          ellps=self.ellps, verbose=verbose)
@@ -1297,7 +1297,7 @@ class insar(SourceInv):
             * u         : array of indexes
 
         Returns:
-            * None  
+            * None
         '''
 
         # Select the stations
@@ -1318,7 +1318,7 @@ class insar(SourceInv):
 
         # Deal with the covariance matrix
         if self.Cd is not None:
-            self.Cd = np.delete(np.delete(Cd ,u, axis=0), u, axis=1)
+            self.Cd = np.delete(np.delete(self.Cd ,u, axis=0), u, axis=1)
 
         # All done
         return
@@ -1379,8 +1379,8 @@ class insar(SourceInv):
             except:
                 GdvzLOS = None
 
-            fault.setGFs(self, deltapressure=[GpLOS], 
-                               GDVx=[GdvxLOS] , GDVy=[GdvyLOS], GDVz =[GdvzLOS], 
+            fault.setGFs(self, deltapressure=[GpLOS],
+                               GDVx=[GdvxLOS] , GDVy=[GdvyLOS], GDVz =[GdvzLOS],
                                vertical=True)
 
         # All done
@@ -1464,7 +1464,7 @@ class insar(SourceInv):
 
     def get2DstrainEst(self, computeNormFact=True):
         '''
-        Returns the matrix to estimate the 2d aerial strain tensor. 
+        Returns the matrix to estimate the 2d aerial strain tensor.
         First column is the Epsilon_xx component
         Second column is the Epsilon_xy component
         Fourth column is the Epsilon_yy component.
@@ -1941,7 +1941,7 @@ class insar(SourceInv):
             * None
         '''
 
-        # Get distances 
+        # Get distances
         d = self.getDistance2Faults(faults)
 
         # Find the close ones
@@ -2634,22 +2634,22 @@ class insar(SourceInv):
 
         # all done
         return
-    
+
     def pickleProfiles(self, names, filename):
         '''
         Add on by M. Dalaison (Jan 2019)
-        To save in one file several profiles drawn in one image 
+        To save in one file several profiles drawn in one image
 	under the form of a list of python dictionaries
-        
+
         Args:
             * names : profile name or list of profile names (list of strings)
-            * filename : for storage of the list of profile object 
+            * filename : for storage of the list of profile object
         '''
         import pickle
 
         # prepare storage list
         store = []
-        
+
         if isinstance(names,str):
             store = self.profiles[names]
 
@@ -2658,7 +2658,7 @@ class insar(SourceInv):
                 # Get the dictionary
                 dic = self.profiles[names[k]]
 
-                # Build list of dictionaries 
+                # Build list of dictionaries
                 store.append( dic )
         else:
             assert False,"Format of names not recognised {} {}".format(names,type(names))
@@ -2672,7 +2672,7 @@ class insar(SourceInv):
         fout.close()
 
 
-    def plotprofile(self, name, figsize=(10,10), fault=None, norm=None, synth=False, 
+    def plotprofile(self, name, figsize=(10,10), fault=None, norm=None, synth=False,
                     cbaxis=[0.1, 0.1, 0.1, 0.01],
                     alpha=.3, plotType='scatter', drawCoastlines=True):
         '''
@@ -2696,10 +2696,10 @@ class insar(SourceInv):
         assert len(x)>5, 'There is less than 5 points in your profile...'
 
         # Plot the insar
-        self.plot(faults=fault, norm=norm, figsize=figsize, 
-                  show=False, alpha=alpha, 
-                  plotType=plotType, expand=0., 
-                  drawCoastlines=drawCoastlines, 
+        self.plot(faults=fault, norm=norm, figsize=figsize,
+                  show=False, alpha=alpha,
+                  plotType=plotType, expand=0.,
+                  drawCoastlines=drawCoastlines,
                   cbaxis=cbaxis,
                   Map=True, Fault=False)
 
@@ -2822,17 +2822,17 @@ class insar(SourceInv):
 
     def removeAtmosphere(self, elevation, quickPlot=False, cmap='jet', norm=None):
         '''
-        Remove an empirical atmospheric phase. The phase is the simply the elevation of the pixel 
+        Remove an empirical atmospheric phase. The phase is the simply the elevation of the pixel
         multitplied by a factor. The factor is the best fit between the two determined using standard
         least squares. Correction is performed in place.
-        
+
         Args:
             * elevation : insar object with elevation as the main data.
-            
+
         Kwargs:
             * quickPlot : bool. Plot the data before and after the correction and the relationship
-                          between the two.    
-        
+                          between the two.
+
         Returns:
             * None
         '''
@@ -2840,19 +2840,19 @@ class insar(SourceInv):
         # Get the phase data
         phase = self.vel
         elev = copy.deepcopy(elevation.vel)
-        
+
         # If there is nans, make a mask
         mask = np.isfinite(phase) & np.isfinite(elev)
         nans = np.isnan(phase) | np.isnan(elev)
-        
+
         # Compute a linear fit between the phase and the elevation
         P = np.polyfit(elev[mask], phase[mask], 1)
-        
+
         # Make a quick plot
         if quickPlot:
             # Create a figure
             fig, axs = plt.subplots(1, 3, figsize=(15,5))
-            
+
             # Create a scalarMap
             if norm is None:
                 vmin = np.nanmin([np.nanmin(phase), np.nanmin(elev*P[0])])
@@ -2860,7 +2860,7 @@ class insar(SourceInv):
             else:
                 vmin, vmax = norm
             cNorm  = colors.Normalize(vmin=vmin, vmax=vmax)
-            
+
             if hasattr(self, 'nx') and hasattr(self, 'ny'):
                 lon = self.lon.reshape((self.ny,self.nx))
                 lat = self.lat.reshape((self.ny,self.nx))
@@ -2878,13 +2878,13 @@ class insar(SourceInv):
                 lon,lat = self.xy2ll(xx,yy)
             # Plot
             sc = axs[0].pcolormesh(lon, lat, data, cmap=cmap, norm=cNorm)
-            
+
             # Make a color bar
             bbox = axs[0].get_position()
             cax = fig.add_axes([bbox.x0-0.1, 0.4, 0.02, 0.2])
             ac = fig.colorbar(sc, cax=cax, orientation='vertical')
             ac.set_label('Data / Elevation scaled', weight='bold')
-            
+
             if hasattr(self, 'nx') and hasattr(self, 'ny'):
                 lon = self.lon.reshape((self.ny,self.nx))
                 lat = self.lat.reshape((self.ny,self.nx))
@@ -2910,18 +2910,18 @@ class insar(SourceInv):
             y = P[0]*x+P[1]
             axs[2].plot(x, y, '-r', linewidth=2)
             axs[2].set_xlabel('Elevation', weight='bold')
-            axs[2].set_ylabel('Data', weight='bold') 
-            
+            axs[2].set_ylabel('Data', weight='bold')
+
             for ax in axs:
                 axs[2].spines['top'].set_visible(False)
                 axs[2].spines['right'].set_visible(False)
-            
+
             # Show me
             fig.show()
-        
+
         # Remove the phase
         self.vel -= elev*P[0] + P[1]
-        
+
         # All done
         return
 
@@ -2996,7 +2996,7 @@ class insar(SourceInv):
 
         # All done
 
-    def plot(self, faults=None, figure=None, gps=None, norm=None, data='data', show=True, 
+    def plot(self, faults=None, figure=None, gps=None, norm=None, data='data', show=True,
              Map=True, Fault=True, lognorm=False,
              drawCoastlines=True, expand=0.2, edgewidth=1, figsize=None, markersize=1.,
              plotType='scatter', cmap='jet', alpha=1., box=None, titleyoffset=1.1,
@@ -3039,12 +3039,12 @@ class insar(SourceInv):
             lonmin, lonmax, latmin, latmax = box
 
         # Create a figure
-        if figsize is not None: 
+        if figsize is not None:
             figsize=(figsize,figsize)
         else:
             figsize=(None, None)
-        fig = geoplot(figure=figure, lonmin=lonmin, lonmax=lonmax, 
-                                     latmin=latmin, latmax=latmax, 
+        fig = geoplot(figure=figure, lonmin=lonmin, lonmax=lonmax,
+                                     latmin=latmin, latmax=latmax,
                                      Map=Map, Fault=Fault,
                                      figsize=figsize)
 
@@ -3053,7 +3053,7 @@ class insar(SourceInv):
 
         # Draw the coastlines
         if drawCoastlines:
-            fig.drawCoastlines(landcolor=landcolor, seacolor=seacolor, 
+            fig.drawCoastlines(landcolor=landcolor, seacolor=seacolor,
                                drawOnFault=True, zorder=0)
 
         # Plot the gps data if asked
@@ -3065,7 +3065,7 @@ class insar(SourceInv):
 
         # Plot the decimation process, if asked
         fig.insar(self, norm=norm, colorbar=colorbar, data=data, plotType=plotType, markersize=markersize,
-                        cbaxis=cbaxis, cborientation=cborientation, cblabel=cblabel, los=los, 
+                        cbaxis=cbaxis, cborientation=cborientation, cblabel=cblabel, los=los,
                         edgewidth=edgewidth, cmap=cmap, zorder=1, alpha=alpha, lognorm=lognorm)
 
         # Plot the fault trace if asked
@@ -3084,7 +3084,7 @@ class insar(SourceInv):
         # Show
         if show:
             fig.show(showFig=['map'])
-        
+
         # Save the whole thing
         self.fig = fig
 
@@ -3096,37 +3096,37 @@ class insar(SourceInv):
                        cmap='jet', lognorm=False, axisNames=None):
         '''
         Show me as many plots of decimated InSAR data as requested in the data Kwargs
-        
+
         Kwargs:
             * figure:   Plot things in a pre-existing figure
             * norm  :   Colorbar limits
             * data  :   Any list of attributes that are in self. Default is None and vel will be plotted
             * show  :   Show on screen?
         '''
-        
+
         # Get the data
         if data is None:
             data = ['vel']
-        
-        # Check 
+
+        # Check
         if axisNames is None:
             axisNames = data
-        
+
         # Check wether the attributes exists and are of the correct size
         values = []
         for d in data:
             assert hasattr(self, d), 'Attribute {} not found in the data'.format(d)
             assert getattr(self, d).shape[0]==self.lon.shape[0], 'Attribute {} has the wrong size'.format(d)
             values.append(getattr(self, d))
-        
+
         # Loop over the data
         if norm is None:
             vmin = np.nanmin([np.nanmin(v) for v in values])
             vmax = np.nanmax([np.nanmax(v) for v in values])
         else:
             vmin = norm[0]
-            vmax = norm[1]  
-        
+            vmax = norm[1]
+
         # Prepare the colormap
         cmap = plt.get_cmap(cmap)
         if lognorm:
@@ -3134,15 +3134,15 @@ class insar(SourceInv):
         else:
             cNorm = colors.Normalize(vmin=vmin, vmax=vmax)
         scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
-        
+
         # Create a figure
         if figsize is None: figsize = (len(data)*5, 5)
         fig, axs = plt.subplots(1, len(data), figsize=figsize)
-        
+
         # Loop over the data
         for ax, val, name in zip(axs, values, axisNames):
             # Iterate over the blocks
-            for corner, v in zip(self.corner, val): 
+            for corner, v in zip(self.corner, val):
                 verts = [(corner[0], corner[1]), (corner[2], corner[1]), (corner[2], corner[3]), (corner[0], corner[3])]
                 rect = colls.PolyCollection([verts],linewidth=edgewidth)
                 rect.set_color(scalarMap.to_rgba(v))
@@ -3151,26 +3151,26 @@ class insar(SourceInv):
                 rect.set_alpha(alpha)
                 ax.add_collection(rect)
             ax.set_title(name, weight='bold')
-        
+
         # Remove all spines and ticks
         for ax in axs:
             ax.autoscale_view()
             ax.axis('off')
-        
+
         # Add a colorbar
         bbox = axs[0].get_position()
         scalarMap.set_array(values[0])
         cax = fig.add_axes([0.4, bbox.y0-0.1, 0.2, 0.02])
         cb = fig.colorbar(scalarMap, cax=cax, orientation='horizontal')
         cb.set_label('LOS displacement')
-        
+
         # Keep it in mind
         self.fig = fig
-        
+
         # Show?
         if show:
             plt.plot
-        
+
         # All done
         return
 
@@ -3452,9 +3452,9 @@ class insar(SourceInv):
 
     def getOffsetFault(self, profile, fault, distance, threshold=25, discretized=True, verbose=False, useerrors=True):
         '''
-        Computes the offset next to a fault along a profile. This is a copy from 
+        Computes the offset next to a fault along a profile. This is a copy from
         a script written by Manon Dalaison during her PhD in 2020 (infamous year).
-        
+
         Args:
             * profile   : Name of the profile
             * fault     : fault object
@@ -3484,7 +3484,7 @@ class insar(SourceInv):
         # Shift with respect to the fault position
         intersect = self.intersectProfileFault(profile, fault, discretized=discretized)
         if intersect is not None: d -= intersect
-        
+
         # Extract points that are in the limit fault area
         pointleft  = ((d > -distance[1]) & (d < -distance[0]))
         pointright = ((d < distance[1]) & (d > distance[0]))
@@ -3598,7 +3598,7 @@ class insar(SourceInv):
             * strike        : 'mean' (mean strike) or a number between 0 and 2pi
             * returnBox     : Return the boxes i which data are taken
         '''
-        
+
         # Average fault strike
         if strike == 'mean':
             strike = np.mean(fault.strike)

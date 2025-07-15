@@ -32,7 +32,7 @@ class creepmeters(SourceInv):
 
     def __init__(self, name, utmzone=None, ellps='WGS84', lon0=None, lat0=None, verbose=True):
 
-        # Initialize the data set 
+        # Initialize the data set
         self.dtype = 'creepmeters'
 
         # Print
@@ -47,7 +47,7 @@ class creepmeters(SourceInv):
                                          utmzone = utmzone,
                                          ellps = ellps,
                                          lon0 = lon0,
-                                         lat0 = lat0) 
+                                         lat0 = lat0)
 
         # Initialize some things
         self.data = {}
@@ -100,16 +100,16 @@ class creepmeters(SourceInv):
         return
 
     def position(self, station):
-        ''' 
+        '''
         Returns lon,lat of a station.
 
         Args:
             * station   : Name of a station.
 
         Returns:
-            * lon, lat 
+            * lon, lat
         '''
-        
+
         # Find it
         u = np.flatnonzero(np.array(self.station)==station)
         u = u[0]
@@ -169,13 +169,13 @@ class creepmeters(SourceInv):
 
         # find it
         u = np.flatnonzero(np.array(self.station)==station)
-        
+
         # delete it
         del self.station[u]
         self.lon = np.delete(self.lon, u)
         self.lat = np.delete(self.lat, u)
 
-        # All done 
+        # All done
         return
 
     def readAllStations(self, directory='.'):
@@ -239,7 +239,7 @@ class creepmeters(SourceInv):
         Text = fin.readlines()
         fin.close()
 
-        # Loop 
+        # Loop
         for text in Text:
 
             # Get values
@@ -247,7 +247,7 @@ class creepmeters(SourceInv):
             da = int(text.split()[1])
             of = float(text.split()[2])
 
-            # Compute the time 
+            # Compute the time
             time = dt.datetime.fromordinal(dt.datetime(yr, 1, 1).toordinal() + da)
 
             # Append
@@ -262,9 +262,9 @@ class creepmeters(SourceInv):
         return
 
     def selectbox(self, minlon, maxlon, minlat, maxlat):
-        ''' 
+        '''
         Select the earthquakes in a box defined by min and max, lat and lon.
-        
+
         Args:
             * minlon        : Minimum longitude.
             * maxlon        : Maximum longitude.
@@ -290,7 +290,7 @@ class creepmeters(SourceInv):
         self.lat = self.lat[u]
         self.x = self.x[u]
         self.y = self.y[u]
-        self.station = sellf.station[u]
+        self.station = self.station[u]
 
         # All done
         return
@@ -322,7 +322,7 @@ class creepmeters(SourceInv):
             * None
         '''
 
-        # Loop 
+        # Loop
         for station in self.station:
             print('Fitting Station {}'.format(station))
             self.fitLinear(station, period=period, directory=directory)
@@ -450,7 +450,7 @@ class creepmeters(SourceInv):
         # Show
         plt.show()
 
-        # All done 
+        # All done
         return
 
 
